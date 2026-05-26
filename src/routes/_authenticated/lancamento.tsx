@@ -384,12 +384,13 @@ function LancamentoPage() {
           ) : (
             <>
               <input value={pacienteQ} onChange={(e) => setPacienteQ(e.target.value)} placeholder="Buscar pelo nome…"
+                onFocus={() => setPacienteOpen(true)}
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-              {(pacienteQ || pacientesFiltered.length > 0) && (
+              {pacienteOpen && (
                 <div className="mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-background">
                   {pacientesFiltered.length === 0 && <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum resultado</p>}
                   {pacientesFiltered.map((p, i) => (
-                    <button key={i} onClick={() => { setPacienteSel(p); setPacienteQ(p.nome); }}
+                    <button key={i} onClick={() => { setPacienteSel(p); setPacienteQ(p.nome); setPacienteOpen(false); }}
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-muted">
                       <span className="font-medium">{p.nome}</span>{" "}
                       <span className="text-xs text-muted-foreground">· {p.cpf || "—"} · {p.valor_consulta || "—"}</span>
