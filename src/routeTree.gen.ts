@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedPagantesRouteImport } from './routes/_authenticated/pagantes'
 import { Route as AuthenticatedLancamentoRouteImport } from './routes/_authenticated/lancamento'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
@@ -35,6 +36,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedPagantesRoute = AuthenticatedPagantesRouteImport.update({
+  id: '/pagantes',
+  path: '/pagantes',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedLancamentoRoute = AuthenticatedLancamentoRouteImport.update({
   id: '/lancamento',
   path: '/lancamento',
@@ -51,12 +57,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/lancamento': typeof AuthenticatedLancamentoRoute
+  '/pagantes': typeof AuthenticatedPagantesRoute
   '/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/lancamento': typeof AuthenticatedLancamentoRoute
+  '/pagantes': typeof AuthenticatedPagantesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -66,20 +74,28 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/lancamento': typeof AuthenticatedLancamentoRoute
+  '/_authenticated/pagantes': typeof AuthenticatedPagantesRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/admin' | '/lancamento' | '/settings'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/lancamento'
+    | '/pagantes'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/admin' | '/lancamento' | '/settings' | '/'
+  to: '/login' | '/admin' | '/lancamento' | '/pagantes' | '/settings' | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/admin'
     | '/_authenticated/lancamento'
+    | '/_authenticated/pagantes'
     | '/_authenticated/settings'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -119,6 +135,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/pagantes': {
+      id: '/_authenticated/pagantes'
+      path: '/pagantes'
+      fullPath: '/pagantes'
+      preLoaderRoute: typeof AuthenticatedPagantesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/lancamento': {
       id: '/_authenticated/lancamento'
       path: '/lancamento'
@@ -139,6 +162,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedLancamentoRoute: typeof AuthenticatedLancamentoRoute
+  AuthenticatedPagantesRoute: typeof AuthenticatedPagantesRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -146,6 +170,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedLancamentoRoute: AuthenticatedLancamentoRoute,
+  AuthenticatedPagantesRoute: AuthenticatedPagantesRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
