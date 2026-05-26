@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
@@ -6,13 +6,14 @@ import {
   listInvoices, processInvoice, confirmSend, listSheetTabs,
   parsePatientText, savePatient, createMonthTab,
 } from "@/lib/notas.functions";
+import { getMe, updateSettings } from "@/lib/auth.functions";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   component: Index,
   head: () => ({
     meta: [
       { title: "Notas Fiscais — Consultório Dra. Ingrid Melo" },
-      { name: "description", content: "Processamento automático de notas fiscais e cadastro de pacientes." },
+      { name: "description", content: "Processamento automático de notas fiscais." },
     ],
   }),
 });
@@ -20,9 +21,6 @@ export const Route = createFileRoute("/")({
 type Invoice = { id: string; name: string; modifiedTime: string; size?: string };
 type Preview = Awaited<ReturnType<typeof processInvoice>>;
 type MonthConfig = { month: string; folderId: string };
-
-const LS_KEY = "notas.monthFolders.v1";
-const LS_ACTIVE = "notas.activeMonth.v1";
 
 function extractFolderId(input: string) {
   const m = input.match(/\/folders\/([a-zA-Z0-9_-]+)/);
@@ -34,10 +32,11 @@ function fmtKB(s?: string) {
 }
 
 function Index() {
-  const fonts = (
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" />
-  );
+  const nav = useNavigate();
+  const qc = useQueryClient();
 
+  const meFn = useServerFn(getMe);
+  const saveSettings = useServerFn(updateSettings);
   const list = useServerFn(listInvoices);
   const process = useServerFn(processInvoice);
   const confirm = useServerFn(confirmSend);
@@ -45,51 +44,36 @@ function Index() {
   const createTab = useServerFn(createMonthTab);
   const parseTxt = useServerFn(parsePatientText);
   const savePat = useServerFn(savePatient);
-  const qc = useQueryClient();
 
-  // Month/folder config (persisted)
-  const [configs, setConfigs] = useState<MonthConfig[]>([]);
+  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const configs: MonthConfig[] = me.data?.settings.month_folders ?? [];
+  const needsSettings = !!me.data && (!me.data.settings.cadastro_sheet_id || !me.data.settings.notas_sheet_id);
+
   const [activeMonth, setActiveMonth] = useState<string>("");
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      const parsed: MonthConfig[] = raw ? JSON.parse(raw) : [];
-      if (parsed.length === 0) {
-        const seed = [{ month: "Maio", folderId: "1dxcGfLTlOHAClmM0zDowtGY7aT7cHous" }];
-        setConfigs(seed);
-        localStorage.setItem(LS_KEY, JSON.stringify(seed));
-      } else setConfigs(parsed);
-      const act = localStorage.getItem(LS_ACTIVE);
-      setActiveMonth(act || (parsed[0]?.month ?? "Maio"));
-    } catch {}
-  }, []);
-
-  function persist(next: MonthConfig[]) {
-    setConfigs(next);
-    localStorage.setItem(LS_KEY, JSON.stringify(next));
-    if (activeMonth && !next.find((c) => c.month === activeMonth)) {
-      const fallback = next[0]?.month ?? "";
-      setActiveMonth(fallback);
-      if (fallback) localStorage.setItem(LS_ACTIVE, fallback);
-      else localStorage.removeItem(LS_ACTIVE);
+    if (!activeMonth && configs.length) setActiveMonth(configs[0].month);
+    if (activeMonth && !configs.find((c) => c.month === activeMonth)) {
+      setActiveMonth(configs[0]?.month ?? "");
     }
-  }
-  function setActive(m: string) {
-    setActiveMonth(m);
-    localStorage.setItem(LS_ACTIVE, m);
-  }
+  }, [configs, activeMonth]);
 
   const activeCfg = useMemo(() => configs.find((c) => c.month === activeMonth), [configs, activeMonth]);
+
+  const persistMut = useMutation({
+    mutationFn: async (next: MonthConfig[]) => saveSettings({ data: { month_folders: next } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+  });
+  function persist(next: MonthConfig[]) { persistMut.mutate(next); }
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["invoices", activeCfg?.folderId],
     queryFn: () => list({ data: { folderId: activeCfg!.folderId } }),
-    enabled: !!activeCfg?.folderId,
+    enabled: !!activeCfg?.folderId && !needsSettings,
   });
 
-  const tabsQ = useQuery({ queryKey: ["tabs"], queryFn: () => tabs(), enabled: showSettings });
+  const tabsQ = useQuery({ queryKey: ["tabs"], queryFn: () => tabs(), enabled: showSettings && !needsSettings });
 
   const [newMonth, setNewMonth] = useState<string>("");
   const createTabMut = useMutation({
@@ -132,7 +116,6 @@ function Index() {
     },
   });
 
-  // ===== Patient registration =====
   const [showPatient, setShowPatient] = useState(false);
   const [patientText, setPatientText] = useState("");
   const [patientForm, setPatientForm] = useState({
@@ -145,8 +128,7 @@ function Index() {
   const saveMut = useMutation({
     mutationFn: async () => savePat({ data: patientForm }),
     onSuccess: () => {
-      setShowPatient(false);
-      setPatientText("");
+      setShowPatient(false); setPatientText("");
       setPatientForm({ nome: "", cpf: "", cep: "", email: "", descricao: "Consulta Psiquiatria", valor_consulta: "" });
     },
   });
@@ -155,38 +137,40 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {fonts}
       <header className="border-b border-border bg-card">
         <div className="mx-auto max-w-6xl px-6 py-8">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Consultório Dra. Ingrid Melo</p>
           <h1 className="mt-2 text-4xl font-semibold">Processamento de Notas Fiscais</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Selecione o mês, processe as notas da pasta correspondente e envie por email com revisão prévia.
-          </p>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
-        {/* Month selector */}
+        {needsSettings && (
+          <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            Antes de processar notas, configure os IDs das planilhas <strong>Cadastro</strong> e <strong>Controle de Notas</strong> em{" "}
+            <button onClick={() => nav({ to: "/settings" })} className="underline font-medium">Configurações</button>.
+          </div>
+        )}
+
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
           <label className="text-sm font-medium">Mês ativo:</label>
           <select
             value={activeMonth}
-            onChange={(e) => setActive(e.target.value)}
+            onChange={(e) => setActiveMonth(e.target.value)}
+            disabled={!configs.length}
             className="rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            {configs.map((c) => (
-              <option key={c.month} value={c.month}>{c.month}</option>
-            ))}
+            {configs.map((c) => <option key={c.month} value={c.month}>{c.month}</option>)}
+            {!configs.length && <option value="">—</option>}
           </select>
           <span className="text-xs text-muted-foreground">
             {activeCfg ? `Pasta: ${activeCfg.folderId.slice(0, 12)}…` : "—"}
           </span>
           <div className="ml-auto flex gap-2">
-            <button onClick={() => setShowSettings(true)} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted">
+            <button onClick={() => setShowSettings(true)} disabled={needsSettings} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
               Gerenciar meses
             </button>
-            <button onClick={() => setShowPatient(true)} className="rounded-md bg-secondary px-3 py-2 text-sm font-medium hover:opacity-90">
+            <button onClick={() => setShowPatient(true)} disabled={needsSettings} className="rounded-md bg-secondary px-3 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50">
               + Cadastrar paciente
             </button>
           </div>
@@ -194,18 +178,15 @@ function Index() {
 
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-semibold">Notas em {activeMonth || "—"}</h2>
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching || !activeCfg}
-            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
+          <button onClick={() => refetch()} disabled={isFetching || !activeCfg}
+            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
             {isFetching ? "Atualizando…" : "Atualizar"}
           </button>
         </div>
 
-        {!activeCfg && (
+        {!activeCfg && !needsSettings && (
           <p className="rounded-md border border-dashed border-border p-6 text-center text-muted-foreground">
-            Nenhum mês configurado. Clique em "Gerenciar meses" para adicionar.
+            Nenhum mês configurado. Clique em "Gerenciar meses".
           </p>
         )}
         {isLoading && <p className="text-muted-foreground">Carregando…</p>}
@@ -228,11 +209,9 @@ function Index() {
                 </div>
                 <div className="flex items-center gap-2">
                   {isSent && <span className="rounded-full bg-success/15 px-3 py-1 text-xs font-medium text-success">Enviado ✓</span>}
-                  <button
-                    onClick={() => { setActive2(f); setPreview(null); procMut.mutate(f); }}
+                  <button onClick={() => { setActive2(f); setPreview(null); procMut.mutate(f); }}
                     disabled={procMut.isPending && active?.id === f.id}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                  >
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
                     {procMut.isPending && active?.id === f.id ? "Processando…" : "Processar"}
                   </button>
                 </div>
@@ -240,14 +219,11 @@ function Index() {
             );
           })}
           {data && data.files.length === 0 && (
-            <p className="rounded-md border border-dashed border-border p-6 text-center text-muted-foreground">
-              Nenhum PDF na pasta.
-            </p>
+            <p className="rounded-md border border-dashed border-border p-6 text-center text-muted-foreground">Nenhum PDF na pasta.</p>
           )}
         </div>
       </main>
 
-      {/* ===== Settings modal ===== */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4" onClick={() => setShowSettings(false)}>
           <div className="my-8 w-full max-w-2xl rounded-2xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -257,60 +233,42 @@ function Index() {
             </div>
             <div className="space-y-4 p-6">
               <p className="text-xs text-muted-foreground">
-                Cada mês aponta para uma pasta no Drive (cole o link ou o ID) e grava na aba de mesmo nome na planilha de notas.
+                Cada mês aponta para uma pasta no Drive e grava na aba de mesmo nome na sua planilha de Notas.
                 {tabsQ.data && <> Abas detectadas: {tabsQ.data.tabs.join(", ") || "nenhuma"}.</>}
               </p>
               {configs.map((c, i) => (
                 <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
-                  <select
-                    value={c.month}
-                    onChange={(e) => {
-                      const next = [...configs]; next[i] = { ...c, month: e.target.value }; persist(next);
-                    }}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
+                  <select value={c.month}
+                    onChange={(e) => { const next = [...configs]; next[i] = { ...c, month: e.target.value }; persist(next); }}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm">
                     {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
-                  <input
-                    placeholder="Link ou ID da pasta no Drive"
-                    value={c.folderId}
-                    onChange={(e) => {
-                      const next = [...configs]; next[i] = { ...c, folderId: extractFolderId(e.target.value) }; persist(next);
-                    }}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                  />
-                  <button
-                    onClick={() => persist(configs.filter((_, j) => j !== i))}
-                    className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
-                  >Remover</button>
+                  <input placeholder="Link ou ID da pasta no Drive" value={c.folderId}
+                    onChange={(e) => { const next = [...configs]; next[i] = { ...c, folderId: extractFolderId(e.target.value) }; persist(next); }}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" />
+                  <button onClick={() => persist(configs.filter((_, j) => j !== i))}
+                    className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Remover</button>
                 </div>
               ))}
               <div className="rounded-md border border-dashed border-border p-3">
                 <p className="mb-2 text-xs font-medium">Adicionar novo mês</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={newMonth}
-                    onChange={(e) => setNewMonth(e.target.value)}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
+                  <select value={newMonth} onChange={(e) => setNewMonth(e.target.value)}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm">
                     <option value="">Selecione…</option>
                     {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
                       .filter((m) => !configs.find((c) => c.month === m))
                       .map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
-                  <button
-                    onClick={() => newMonth && createTabMut.mutate(newMonth)}
+                  <button onClick={() => newMonth && createTabMut.mutate(newMonth)}
                     disabled={!newMonth || createTabMut.isPending}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                  >
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
                     {createTabMut.isPending ? "Criando aba…" : "Adicionar + criar aba na planilha"}
                   </button>
                 </div>
-                {createTabMut.error && (
-                  <p className="mt-2 text-xs text-destructive">{(createTabMut.error as Error).message}</p>
-                )}
+                {createTabMut.error && <p className="mt-2 text-xs text-destructive">{(createTabMut.error as Error).message}</p>}
                 {createTabMut.data && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     {createTabMut.data.alreadyExisted
@@ -327,9 +285,8 @@ function Index() {
         </div>
       )}
 
-      {/* ===== Patient registration modal ===== */}
       {showPatient && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4" onClick={() => !saveMut.isPending && setShowPatient(false)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4">
           <div className="my-8 w-full max-w-2xl rounded-2xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-border p-6 flex items-center justify-between">
               <h3 className="text-xl font-semibold">Cadastrar paciente</h3>
@@ -338,19 +295,12 @@ function Index() {
             <div className="space-y-4 p-6">
               <label className="block">
                 <span className="text-xs text-muted-foreground">Cole o texto enviado pelo paciente</span>
-                <textarea
-                  rows={6}
-                  value={patientText}
-                  onChange={(e) => setPatientText(e.target.value)}
-                  placeholder="Ex: Meu nome é João Silva, CPF 123.456.789-00, CEP 01310-100, email joao@gmail.com…"
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
+                <textarea rows={6} value={patientText} onChange={(e) => setPatientText(e.target.value)}
+                  placeholder="Ex: Meu nome é João Silva, CPF 123.456.789-00…"
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
               </label>
-              <button
-                onClick={() => parseMut.mutate()}
-                disabled={!patientText.trim() || parseMut.isPending}
-                className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-              >
+              <button onClick={() => parseMut.mutate()} disabled={!patientText.trim() || parseMut.isPending}
+                className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
                 {parseMut.isPending ? "Extraindo…" : "Extrair dados com IA"}
               </button>
               {parseMut.error && <p className="text-sm text-destructive">{(parseMut.error as Error).message}</p>}
@@ -362,31 +312,26 @@ function Index() {
                 ] as const).map(([k, label]) => (
                   <label key={k} className="block">
                     <span className="text-xs text-muted-foreground">{label}</span>
-                    <input
-                      value={patientForm[k]}
+                    <input value={patientForm[k]}
                       onChange={(e) => setPatientForm({ ...patientForm, [k]: e.target.value })}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    />
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                   </label>
                 ))}
               </div>
               {saveMut.error && <p className="text-sm text-destructive">{(saveMut.error as Error).message}</p>}
             </div>
             <div className="flex justify-end gap-2 border-t border-border bg-muted/30 p-4">
-              <button onClick={() => setShowPatient(false)} disabled={saveMut.isPending} className="rounded-md border border-border bg-card px-4 py-2 text-sm hover:bg-muted disabled:opacity-50">Cancelar</button>
-              <button
-                onClick={() => saveMut.mutate()}
-                disabled={!patientForm.nome.trim() || saveMut.isPending}
-                className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                {saveMut.isPending ? "Salvando…" : "Salvar na planilha Cadastro"}
+              <button onClick={() => setShowPatient(false)} disabled={saveMut.isPending}
+                className="rounded-md border border-border bg-card px-4 py-2 text-sm hover:bg-muted disabled:opacity-50">Cancelar</button>
+              <button onClick={() => saveMut.mutate()} disabled={!patientForm.nome.trim() || saveMut.isPending}
+                className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                {saveMut.isPending ? "Salvando…" : "Salvar"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== Review modal ===== */}
       {active && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4">
           <div className="my-8 w-full max-w-4xl rounded-2xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -395,14 +340,14 @@ function Index() {
                 <div>
                   <h3 className="text-xl font-semibold">Revisão</h3>
                   <p className="mt-1 text-sm text-muted-foreground truncate">{active.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Será gravado na aba: <strong>{activeMonth}</strong></p>
+                  <p className="mt-1 text-xs text-muted-foreground">Aba: <strong>{activeMonth}</strong></p>
                 </div>
                 <button onClick={() => !sendMut.isPending && setActive2(null)} className="text-muted-foreground hover:text-foreground">✕</button>
               </div>
             </div>
 
             <div className="space-y-6 p-6">
-              {procMut.isPending && <p className="text-muted-foreground">Lendo PDF e cruzando com o cadastro…</p>}
+              {procMut.isPending && <p className="text-muted-foreground">Lendo PDF…</p>}
               {procMut.error && (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
                   {(procMut.error as Error).message}
@@ -419,7 +364,7 @@ function Index() {
                       <div><span className="text-muted-foreground">Valor líquido:</span> <span className="font-medium">{preview.extracted.valor_liquido}</span></div>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Match: {preview.patient.source === "none" ? "❌ paciente não encontrado no cadastro" : `${preview.patient.source} (${Math.round(preview.matchScore * 100)}%)`}
+                      Match: {preview.patient.source === "none" ? "❌ não encontrado" : `${preview.patient.source} (${Math.round(preview.matchScore * 100)}%)`}
                     </p>
                   </div>
 
@@ -429,34 +374,31 @@ function Index() {
                       {COLS.map((c, i) => (
                         <label key={c} className="block">
                           <span className="text-xs text-muted-foreground">{c}</span>
-                          <input
-                            value={editRow[i] ?? ""}
+                          <input value={editRow[i] ?? ""}
                             onChange={(e) => { const r = [...editRow]; r[i] = e.target.value; setEditRow(r); }}
-                            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          />
+                            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                         </label>
                       ))}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Coluna J (NF Emitida) fica em branco — os contadores preenchem. Coluna K (NF Enviada) é marcada com "X" ao enviar.
-                    </p>
                   </div>
 
                   <div>
                     <p className="mb-2 text-sm font-semibold">Email para o paciente</p>
                     <label className="block">
                       <span className="text-xs text-muted-foreground">Para</span>
-                      <input value={editEmail.to} onChange={(e) => setEditEmail({ ...editEmail, to: e.target.value })} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                      <input value={editEmail.to} onChange={(e) => setEditEmail({ ...editEmail, to: e.target.value })}
+                        className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                     </label>
                     <label className="mt-3 block">
                       <span className="text-xs text-muted-foreground">Assunto</span>
-                      <input value={editEmail.subject} onChange={(e) => setEditEmail({ ...editEmail, subject: e.target.value })} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                      <input value={editEmail.subject} onChange={(e) => setEditEmail({ ...editEmail, subject: e.target.value })}
+                        className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                     </label>
                     <label className="mt-3 block">
                       <span className="text-xs text-muted-foreground">Mensagem</span>
-                      <textarea rows={7} value={editEmail.body} onChange={(e) => setEditEmail({ ...editEmail, body: e.target.value })} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" />
+                      <textarea rows={7} value={editEmail.body} onChange={(e) => setEditEmail({ ...editEmail, body: e.target.value })}
+                        className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" />
                     </label>
-                    <p className="mt-1 text-xs text-muted-foreground">📎 PDF da nota será anexado automaticamente.</p>
                   </div>
 
                   {sendMut.error && (
@@ -469,12 +411,10 @@ function Index() {
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/30 p-4">
-              <button onClick={() => setActive2(null)} disabled={sendMut.isPending} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">Cancelar</button>
-              <button
-                onClick={() => sendMut.mutate()}
-                disabled={!preview || sendMut.isPending}
-                className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
+              <button onClick={() => setActive2(null)} disabled={sendMut.isPending}
+                className="rounded-md border border-border bg-card px-4 py-2 text-sm hover:bg-muted disabled:opacity-50">Cancelar</button>
+              <button onClick={() => sendMut.mutate()} disabled={!preview || sendMut.isPending}
+                className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
                 {sendMut.isPending ? "Enviando…" : "Confirmar e enviar"}
               </button>
             </div>

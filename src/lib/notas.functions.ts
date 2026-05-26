@@ -1,12 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const DRIVE = "https://connector-gateway.lovable.dev/google_drive/drive/v3";
 const SHEETS = "https://connector-gateway.lovable.dev/google_sheets/v4";
 const GMAIL = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 const AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
-
-const CADASTRO_ID = "172pPFDBnOl2JYng7eupQKCImVj3y_-lT6P7PEqQUMm0";
-const NOTAS_ID = "1wPIjvtVUHinI9ijKr2cKMXa2LHmjrifZAAA8LfHkCd0";
 
 const MONTHS_PT = [
   "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -22,15 +20,24 @@ function gw() {
   return { lk, dk, sk, mk };
 }
 
-function normalize(s: string) {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+async function getUserSheetIds(ctx: { supabase: any; userId: string }) {
+  const { data, error } = await ctx.supabase
+    .from("user_settings")
+    .select("cadastro_sheet_id,notas_sheet_id")
+    .eq("user_id", ctx.userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const cad = (data?.cadastro_sheet_id ?? "").trim();
+  const not = (data?.notas_sheet_id ?? "").trim();
+  if (!cad || !not) {
+    throw new Error("Configure as planilhas Cadastro e Notas em 'Configurações' antes de continuar.");
+  }
+  return { CADASTRO_ID: cad, NOTAS_ID: not };
 }
 
+function normalize(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
 function nameSimilarity(a: string, b: string) {
   const A = new Set(normalize(a).split(" ").filter((w) => w.length > 1));
   const B = new Set(normalize(b).split(" ").filter((w) => w.length > 1));
@@ -67,11 +74,7 @@ async function sheetAppend(spreadsheetId: string, range: string, values: any[][]
     `${SHEETS}/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lk}`,
-        "X-Connection-Api-Key": sk,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk },
       body: JSON.stringify({ values }),
     },
   );
@@ -79,142 +82,105 @@ async function sheetAppend(spreadsheetId: string, range: string, values: any[][]
   return res.json();
 }
 
-async function fetchSheetMeta() {
+async function fetchSheetMeta(NOTAS_ID: string) {
   const { lk, sk } = gw();
   const res = await fetch(
     `${SHEETS}/spreadsheets/${NOTAS_ID}?fields=sheets(properties(sheetId,title,index))`,
     { headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk } },
   );
   if (!res.ok) throw new Error(`Sheets meta falhou ${res.status}: ${await res.text()}`);
-  return (await res.json()) as {
-    sheets: Array<{ properties: { sheetId: number; title: string; index: number } }>;
-  };
+  return (await res.json()) as { sheets: Array<{ properties: { sheetId: number; title: string; index: number } }> };
 }
 
-export const listSheetTabs = createServerFn({ method: "GET" }).handler(async () => {
-  const data = await fetchSheetMeta();
-  const tabs = (data.sheets ?? [])
-    .map((s) => s.properties.title)
-    .filter((t) => MONTHS_PT.includes(t));
-  return { tabs };
-});
+export const listSheetTabs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { NOTAS_ID } = await getUserSheetIds(context);
+    const data = await fetchSheetMeta(NOTAS_ID);
+    const tabs = (data.sheets ?? []).map((s) => s.properties.title).filter((t) => MONTHS_PT.includes(t));
+    return { tabs };
+  });
 
 export const createMonthTab = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { month: string } | undefined) => {
     if (!d?.month || !MONTHS_PT.includes(d.month)) throw new Error("Mês inválido");
     return d;
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ context, data }) => {
+    const { NOTAS_ID } = await getUserSheetIds(context);
     const { lk, sk } = gw();
-    const meta = await fetchSheetMeta();
+    const meta = await fetchSheetMeta(NOTAS_ID);
     const existing = meta.sheets.map((s) => s.properties.title);
     if (existing.includes(data.month)) {
-      return { success: true, alreadyExisted: true };
+      return { success: true, alreadyExisted: true, copiedFrom: null as string | null };
     }
 
-    // Escolhe a aba-fonte: mês anterior na ordem do calendário, ou a aba de mês mais recente existente.
     const targetIdx = MONTHS_PT.indexOf(data.month);
-    const monthTabs = meta.sheets
-      .map((s) => s.properties.title)
-      .filter((t) => MONTHS_PT.includes(t));
+    const monthTabs = meta.sheets.map((s) => s.properties.title).filter((t) => MONTHS_PT.includes(t));
     let source: string | null = null;
     for (let i = targetIdx - 1; i >= 0; i--) {
       if (monthTabs.includes(MONTHS_PT[i])) { source = MONTHS_PT[i]; break; }
     }
     if (!source) {
-      // pega o mês mais "próximo anterior" entre as abas existentes
-      const sorted = monthTabs
-        .map((t) => ({ t, i: MONTHS_PT.indexOf(t) }))
-        .sort((a, b) => b.i - a.i);
+      const sorted = monthTabs.map((t) => ({ t, i: MONTHS_PT.indexOf(t) })).sort((a, b) => b.i - a.i);
       source = sorted[0]?.t ?? null;
     }
 
-    // 1) cria a nova aba
     const addRes = await fetch(`${SHEETS}/spreadsheets/${NOTAS_ID}:batchUpdate`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lk}`,
-        "X-Connection-Api-Key": sk,
-      },
-      body: JSON.stringify({
-        requests: [{ addSheet: { properties: { title: data.month } } }],
-      }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: data.month } } }] }),
     });
     if (!addRes.ok) throw new Error(`Criar aba falhou ${addRes.status}: ${await addRes.text()}`);
-    const addJson = (await addRes.json()) as {
-      replies: Array<{ addSheet?: { properties: { sheetId: number } } }>;
-    };
+    const addJson = (await addRes.json()) as { replies: Array<{ addSheet?: { properties: { sheetId: number } } }> };
     const newSheetId = addJson.replies?.[0]?.addSheet?.properties.sheetId;
 
-    // 2) copia o cabeçalho (valores + formatação) das linhas 1 e 2 da aba-fonte
     if (source && newSheetId != null) {
-      const sourceSheetId = meta.sheets.find((s) => s.properties.title === source)
-        ?.properties.sheetId;
+      const sourceSheetId = meta.sheets.find((s) => s.properties.title === source)?.properties.sheetId;
       if (sourceSheetId != null) {
         const copyRes = await fetch(`${SHEETS}/spreadsheets/${NOTAS_ID}:batchUpdate`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${lk}`,
-            "X-Connection-Api-Key": sk,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk },
           body: JSON.stringify({
-            requests: [
-              {
-                copyPaste: {
-                  source: {
-                    sheetId: sourceSheetId,
-                    startRowIndex: 0,
-                    endRowIndex: 2,
-                    startColumnIndex: 0,
-                    endColumnIndex: 11,
-                  },
-                  destination: {
-                    sheetId: newSheetId,
-                    startRowIndex: 0,
-                    endRowIndex: 2,
-                    startColumnIndex: 0,
-                    endColumnIndex: 11,
-                  },
-                  pasteType: "PASTE_NORMAL",
-                  pasteOrientation: "NORMAL",
-                },
+            requests: [{
+              copyPaste: {
+                source: { sheetId: sourceSheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 11 },
+                destination: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 11 },
+                pasteType: "PASTE_NORMAL", pasteOrientation: "NORMAL",
               },
-            ],
+            }],
           }),
         });
         if (!copyRes.ok) throw new Error(`Cabeçalho falhou ${copyRes.status}: ${await copyRes.text()}`);
       }
     }
-
     return { success: true, alreadyExisted: false, copiedFrom: source };
   });
 
 export const listInvoices = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { folderId: string } | undefined) => {
     if (!d?.folderId) throw new Error("folderId obrigatório");
     return d;
   })
   .handler(async ({ data }) => {
     const { lk, dk } = gw();
-    const q = encodeURIComponent(
-      `'${data.folderId}' in parents and mimeType='application/pdf' and trashed=false`,
-    );
+    const q = encodeURIComponent(`'${data.folderId}' in parents and mimeType='application/pdf' and trashed=false`);
     const res = await fetch(
       `${DRIVE}/files?q=${q}&fields=files(id,name,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`,
       { headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": dk } },
     );
     if (!res.ok) throw new Error(`Drive list falhou ${res.status}: ${await res.text()}`);
-    const data2 = (await res.json()) as {
-      files: Array<{ id: string; name: string; size?: string; modifiedTime: string }>;
-    };
+    const data2 = (await res.json()) as { files: Array<{ id: string; name: string; size?: string; modifiedTime: string }> };
     return { files: data2.files ?? [] };
   });
 
 export const processInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { fileId: string; fileName: string }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ context, data }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
     const { lk } = gw();
     const pdfBase64 = await driveDownload(data.fileId);
 
@@ -224,15 +190,13 @@ export const processInvoice = createServerFn({ method: "POST" })
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}` },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:application/pdf;base64,${pdfBase64}` } },
-            ],
-          },
-        ],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:application/pdf;base64,${pdfBase64}` } },
+          ],
+        }],
       }),
     });
     if (!aiRes.ok) throw new Error(`IA falhou ${aiRes.status}: ${await aiRes.text()}`);
@@ -240,11 +204,7 @@ export const processInvoice = createServerFn({ method: "POST" })
     const raw: string = aiJson.choices?.[0]?.message?.content ?? "";
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error(`IA não retornou JSON: ${raw}`);
-    const extracted = JSON.parse(match[0]) as {
-      tomador: string;
-      valor_liquido: string;
-      competencia: string;
-    };
+    const extracted = JSON.parse(match[0]) as { tomador: string; valor_liquido: string; competencia: string };
 
     const cad = await sheetValues(CADASTRO_ID, "Cadastro!A2:H1000");
     const rows = cad.values ?? [];
@@ -319,17 +279,10 @@ export const processInvoice = createServerFn({ method: "POST" })
     const subject = `Nota Fiscal Consulta - ${monthName}`;
     const body = `Olá, ${firstName}!\n\nSegue em anexo a nota fiscal do pagamento da sua última consulta.\n\nAtenciosamente,\nConsultório Dra. Ingrid Melo\nPsiquiatra – CRM 52053 | RQE 45561`;
 
-    // Colunas A–I (J = NF Emitida, preenchida pelos contadores; K = NF Enviada, marcamos no envio)
     const sheetRow = [
       extracted.competencia,
-      patient.nome,
-      patient.cpf,
-      patient.cep,
-      patient.email,
-      patient.descricao,
-      patient.valor_consulta,
-      extracted.valor_liquido,
-      patient.observacao,
+      patient.nome, patient.cpf, patient.cep, patient.email,
+      patient.descricao, patient.valor_consulta, extracted.valor_liquido, patient.observacao,
     ];
 
     return {
@@ -342,19 +295,15 @@ export const processInvoice = createServerFn({ method: "POST" })
   });
 
 export const confirmSend = createServerFn({ method: "POST" })
-  .inputValidator(
-    (d: {
-      sheetRow: string[];
-      sheetName: string;
-      email: { to: string; subject: string; body: string };
-      pdfBase64: string;
-      fileName: string;
-    }) => d,
-  )
-  .handler(async ({ data }) => {
-    if (!data.email.to || !data.email.to.includes("@")) {
-      throw new Error("Email do paciente ausente ou inválido");
-    }
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    sheetRow: string[]; sheetName: string;
+    email: { to: string; subject: string; body: string };
+    pdfBase64: string; fileName: string;
+  }) => d)
+  .handler(async ({ context, data }) => {
+    const { NOTAS_ID } = await getUserSheetIds(context);
+    if (!data.email.to || !data.email.to.includes("@")) throw new Error("Email do paciente ausente ou inválido");
     if (!data.sheetName) throw new Error("Mês de destino não informado");
 
     const { lk, mk } = gw();
@@ -381,31 +330,22 @@ export const confirmSend = createServerFn({ method: "POST" })
       `--${boundary}--`,
     ].join("\r\n");
 
-    const raw = btoa(unescape(encodeURIComponent(mime)))
-      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const raw = btoa(unescape(encodeURIComponent(mime))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
     const gRes = await fetch(`${GMAIL}/users/me/messages/send`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lk}`,
-        "X-Connection-Api-Key": mk,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": mk },
       body: JSON.stringify({ raw }),
     });
     if (!gRes.ok) throw new Error(`Gmail falhou ${gRes.status}: ${await gRes.text()}`);
 
-    // Coluna J (NF Emitida) fica em branco — contadores preenchem.
-    // Coluna K (NF Enviada) marcamos com "X" agora.
     const finalRow = [...data.sheetRow.slice(0, 9), "", "X"];
     await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [finalRow]);
-
     return { success: true };
   });
 
-// ===== Cadastro de paciente via texto livre =====
-
 export const parsePatientText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { text: string }) => d)
   .handler(async ({ data }) => {
     const { lk } = gw();
@@ -413,10 +353,7 @@ export const parsePatientText = createServerFn({ method: "POST" })
     const res = await fetch(AI, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}` },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: prompt }],
-      }),
+      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages: [{ role: "user", content: prompt }] }),
     });
     if (!res.ok) throw new Error(`IA falhou ${res.status}: ${await res.text()}`);
     const j = (await res.json()) as any;
@@ -425,21 +362,19 @@ export const parsePatientText = createServerFn({ method: "POST" })
     if (!m) throw new Error(`IA não retornou JSON: ${raw}`);
     const p = JSON.parse(m[0]) as Record<string, string>;
     return {
-      nome: p.nome ?? "",
-      cpf: p.cpf ?? "",
-      cep: p.cep ?? "",
-      email: p.email ?? "",
-      descricao: p.descricao || "Consulta Psiquiatria",
-      valor_consulta: p.valor_consulta ?? "",
+      nome: p.nome ?? "", cpf: p.cpf ?? "", cep: p.cep ?? "", email: p.email ?? "",
+      descricao: p.descricao || "Consulta Psiquiatria", valor_consulta: p.valor_consulta ?? "",
     };
   });
 
 export const savePatient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     nome: string; cpf: string; cep: string; email: string;
     descricao: string; valor_consulta: string;
   }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ context, data }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
     if (!data.nome.trim()) throw new Error("Nome é obrigatório");
     await sheetAppend(CADASTRO_ID, "Cadastro!A:F", [[
       data.nome, data.cpf, data.cep, data.email, data.descricao, data.valor_consulta,
