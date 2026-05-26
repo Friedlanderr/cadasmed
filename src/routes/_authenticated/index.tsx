@@ -120,9 +120,9 @@ function Index() {
       });
     },
     onSuccess: () => {
-      if (active) setSent((s) => new Set(s).add(active.id));
       setActive2(null); setPreview(null);
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["sent-invoices"] });
     },
   });
 
