@@ -277,7 +277,7 @@ export const processInvoice = createServerFn({ method: "POST" })
     }
     const firstName = patient.nome.split(/\s+/)[0] || "";
     const subject = `Nota Fiscal Consulta - ${monthName}`;
-    const body = `Olá, ${firstName}!\n\nSegue em anexo a nota fiscal do pagamento da sua última consulta.\n\nAtenciosamente,\nConsultório Dra. Ingrid Melo\nPsiquiatra – CRM 52053 | RQE 45561`;
+    const body = `Olá, ${firstName}!\n\nSegue em anexo a nota fiscal do pagamento da sua última consulta.\n\nAtenciosamente,\nCadasMed - Auxiliando o seu consultório\nPsiquiatria – CRM 52053 | RQE 45561`;
 
     const sheetRow = [
       extracted.competencia,
