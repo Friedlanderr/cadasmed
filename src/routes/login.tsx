@@ -30,7 +30,7 @@ function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Consultório Dra. Ingrid Melo</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CadasMed - Auxiliando o seu consultório</p>
         <h1 className="mt-2 text-2xl font-semibold">Entrar</h1>
         <p className="mt-1 text-sm text-muted-foreground">Use suas credenciais para acessar.</p>
 

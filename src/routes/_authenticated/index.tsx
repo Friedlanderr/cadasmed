@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Notas Fiscais — Consultório Dra. Ingrid Melo" },
+      { title: "Notas Fiscais — CadasMed" },
       { name: "description", content: "Processamento automático de notas fiscais." },
     ],
   }),
@@ -139,7 +139,7 @@ function Index() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border bg-card">
         <div className="mx-auto max-w-6xl px-6 py-8">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Consultório Dra. Ingrid Melo</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">CadasMed - Auxiliando o seu consultório</p>
           <h1 className="mt-2 text-4xl font-semibold">Processamento de Notas Fiscais</h1>
         </div>
       </header>
