@@ -41,6 +41,7 @@ function Index() {
   const list = useServerFn(listInvoices);
   const process = useServerFn(processInvoice);
   const confirm = useServerFn(confirmSend);
+  const tabs = useServerFn(listSheetTabs);
   const createTab = useServerFn(createMonthTab);
   const parseTxt = useServerFn(parsePatientText);
   const savePat = useServerFn(savePatient);
