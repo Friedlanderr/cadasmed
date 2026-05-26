@@ -57,6 +57,9 @@ function LancamentoPage() {
   const [mes, setMes] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const [scanDays, setScanDays] = useState(15);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<Record<string, "pending" | "ok" | "skip" | "err">>({});
+  const [bulkErr, setBulkErr] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const m = monthFromBR(dataPag);
@@ -121,7 +124,21 @@ function LancamentoPage() {
 
   const scanMut = useMutation({
     mutationFn: async () => scanFn({ data: { days: scanDays } }),
+    onSuccess: () => { setSelectedIds(new Set()); setBulkStatus({}); setBulkErr({}); },
   });
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  function toggleAll() {
+    const items = scanMut.data?.items ?? [];
+    setSelectedIds((prev) => prev.size === items.length ? new Set() : new Set(items.map((i) => i.messageId)));
+  }
 
   function applySuggestion(s: any) {
     const m = s.match;
@@ -135,7 +152,6 @@ function LancamentoPage() {
     } else if (m.source === "pagante") {
       setPagSel({ nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email });
       setPagQ(m.nome);
-      // try auto-match beneficiary in Cadastro
       const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
       const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
       if (benRow) { setPacienteSel(benRow); setPacienteQ(benRow.nome); }
@@ -150,6 +166,65 @@ function LancamentoPage() {
     setOkMsg("Sugestão aplicada — confira os campos");
     setTimeout(() => setOkMsg(""), 3000);
   }
+
+  const bulkMut = useMutation({
+    mutationFn: async () => {
+      const items = (scanMut.data?.items ?? []).filter((i) => selectedIds.has(i.messageId));
+      const status: Record<string, "pending" | "ok" | "skip" | "err"> = {};
+      const errs: Record<string, string> = {};
+      for (const s of items) status[s.messageId] = "pending";
+      setBulkStatus({ ...status }); setBulkErr({});
+
+      for (const s of items) {
+        try {
+          const m: any = s.match;
+          if (m.source === "none") { status[s.messageId] = "skip"; errs[s.messageId] = "Sem correspondência"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
+
+          let paciente: any = null;
+          let pagante: any = null;
+          if (m.source === "cadastro") {
+            paciente = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email, descricao: m.descricao, valor_consulta: m.valor_consulta };
+          } else if (m.source === "pagante") {
+            pagante = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email };
+            const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
+            const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+            if (benRow) paciente = benRow;
+          }
+          if (!paciente) { status[s.messageId] = "skip"; errs[s.messageId] = "Beneficiário não localizado"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
+
+          const dataP = s.date || todayBR();
+          const mesDest = monthFromBR(dataP);
+          if (!mesDest) { status[s.messageId] = "err"; errs[s.messageId] = "Data inválida"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
+          if (!tabsQ.data?.tabs.includes(mesDest)) {
+            await createTab({ data: { month: mesDest } });
+            await qc.invalidateQueries({ queryKey: ["tabs"] });
+          }
+          const v = (s.valor ?? "").replace(/[^\d,.]/g, "");
+          const target = pagante ?? paciente;
+          const obsFinal = pagante ? `Beneficiário: ${paciente.nome}` : "";
+
+          await lancarFn({
+            data: {
+              data_pagamento: dataP,
+              sheetName: mesDest,
+              nome: target.nome,
+              cpf: target.cpf ?? "",
+              cep: target.cep ?? "",
+              email: target.email ?? "",
+              descricao: paciente.descricao || "Consulta Psiquiatria",
+              valor_consulta: paciente.valor_consulta ?? "",
+              valor_pagamento: v ? `R$ ${v}` : "",
+              observacao: obsFinal,
+            },
+          });
+          status[s.messageId] = "ok"; setBulkStatus({ ...status });
+        } catch (e: any) {
+          status[s.messageId] = "err"; errs[s.messageId] = e?.message ?? "Erro"; setBulkStatus({ ...status }); setBulkErr({ ...errs });
+        }
+      }
+      return { done: true };
+    },
+  });
 
 
 
@@ -196,22 +271,62 @@ function LancamentoPage() {
             {scanMut.data.items.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhum email encontrado no período.</p>
             )}
-            {scanMut.data.items.map((s) => (
-              <div key={s.messageId} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{s.pagador} <span className="text-muted-foreground font-normal">· {s.valor || "—"} · {s.date}</span></p>
-                  <p className="text-xs text-muted-foreground">
-                    {s.match.source === "cadastro" && <>✓ Casou com paciente <strong>{s.match.nome}</strong></>}
-                    {s.match.source === "pagante" && <>✓ Casou com pagante <strong>{s.match.nome}</strong>{s.match.beneficiarioSugerido ? ` → benef. ${s.match.beneficiarioSugerido}` : ""}</>}
-                    {s.match.source === "none" && <span className="text-amber-700">Não encontrado no Cadastro</span>}
-                  </p>
+            {scanMut.data.items.length > 0 && (
+              <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2 text-xs">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox"
+                    checked={selectedIds.size === scanMut.data.items.length && selectedIds.size > 0}
+                    onChange={toggleAll} />
+                  <span>Selecionar todos ({selectedIds.size}/{scanMut.data.items.length})</span>
+                </label>
+                <div className="flex gap-2">
+                  {selectedIds.size === 1 && (() => {
+                    const one = scanMut.data.items.find((i) => selectedIds.has(i.messageId));
+                    return one ? (
+                      <button onClick={() => applySuggestion(one)}
+                        className="rounded-md border border-border px-3 py-1 hover:bg-muted">
+                        Editar selecionado no formulário
+                      </button>
+                    ) : null;
+                  })()}
+                  {selectedIds.size >= 1 && (
+                    <button onClick={() => bulkMut.mutate()} disabled={bulkMut.isPending}
+                      className="rounded-md bg-primary px-3 py-1 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                      {bulkMut.isPending ? "Lançando…" : `Lançar ${selectedIds.size} selecionado${selectedIds.size > 1 ? "s" : ""}`}
+                    </button>
+                  )}
                 </div>
-                <button onClick={() => applySuggestion(s)}
-                  className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted">
-                  Usar
-                </button>
               </div>
-            ))}
+            )}
+            {scanMut.data.items.map((s) => {
+              const st = bulkStatus[s.messageId];
+              const checked = selectedIds.has(s.messageId);
+              return (
+                <div key={s.messageId} className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${checked ? "border-primary bg-primary/5" : "border-border bg-background"}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleSelected(s.messageId)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{s.pagador} <span className="text-muted-foreground font-normal">· {s.valor || "—"} · {s.date}</span></p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.match.source === "cadastro" && <>✓ Casou com paciente <strong>{s.match.nome}</strong></>}
+                      {s.match.source === "pagante" && <>✓ Casou com pagante <strong>{s.match.nome}</strong>{s.match.beneficiarioSugerido ? ` → benef. ${s.match.beneficiarioSugerido}` : ""}</>}
+                      {s.match.source === "none" && <span className="text-amber-700">Não encontrado no Cadastro</span>}
+                    </p>
+                    {st && (
+                      <p className="text-xs mt-1">
+                        {st === "pending" && <span className="text-muted-foreground">Lançando…</span>}
+                        {st === "ok" && <span className="text-success">✓ Lançado</span>}
+                        {st === "skip" && <span className="text-amber-700">Ignorado: {bulkErr[s.messageId]}</span>}
+                        {st === "err" && <span className="text-destructive">Erro: {bulkErr[s.messageId]}</span>}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => applySuggestion(s)}
+                    className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted">
+                    Usar
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
