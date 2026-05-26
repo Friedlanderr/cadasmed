@@ -571,6 +571,7 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       date: string;
       pagador: string;
       valor: string;
+      alreadyInSheet: boolean;
       match: {
         source: "cadastro" | "pagante" | "none";
         score: number;
