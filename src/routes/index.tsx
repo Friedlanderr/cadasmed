@@ -281,10 +281,38 @@ function Index() {
                   >Remover</button>
                 </div>
               ))}
-              <button
-                onClick={() => persist([...configs, { month: "Junho", folderId: "" }])}
-                className="rounded-md border border-dashed border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-              >+ Adicionar mês</button>
+              <div className="rounded-md border border-dashed border-border p-3">
+                <p className="mb-2 text-xs font-medium">Adicionar novo mês</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={newMonth}
+                    onChange={(e) => setNewMonth(e.target.value)}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Selecione…</option>
+                    {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+                      .filter((m) => !configs.find((c) => c.month === m))
+                      .map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <button
+                    onClick={() => newMonth && createTabMut.mutate(newMonth)}
+                    disabled={!newMonth || createTabMut.isPending}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  >
+                    {createTabMut.isPending ? "Criando aba…" : "Adicionar + criar aba na planilha"}
+                  </button>
+                </div>
+                {createTabMut.error && (
+                  <p className="mt-2 text-xs text-destructive">{(createTabMut.error as Error).message}</p>
+                )}
+                {createTabMut.data && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {createTabMut.data.alreadyExisted
+                      ? "Aba já existia na planilha — apenas vinculada aqui."
+                      : `Aba criada${createTabMut.data.copiedFrom ? ` com cabeçalho copiado de ${createTabMut.data.copiedFrom}` : ""}.`}
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-border bg-muted/30 p-4">
               <button onClick={() => setShowSettings(false)} className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">Pronto</button>
