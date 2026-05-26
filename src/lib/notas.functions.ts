@@ -534,7 +534,18 @@ function gmailDateToBR(internalDateMs: string | number): string {
 
 export const scanInterPayments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { days?: number } | undefined) => ({ days: d?.days ?? 30 }))
+  .inputValidator((d: { days?: number; dateFrom?: string; dateTo?: string } | undefined) => {
+    const days = d?.days ?? 15;
+    const dateFrom = (d?.dateFrom ?? "").trim();
+    const dateTo = (d?.dateTo ?? "").trim();
+    if (dateFrom && dateTo) {
+      const fromParts = dateFrom.split("/");
+      const toParts = dateTo.split("/");
+      if (fromParts.length !== 3 || toParts.length !== 3) throw new Error("Formato de data inválido. Use DD/MM/AAAA");
+      return { days, dateFrom, dateTo };
+    }
+    return { days, dateFrom: "", dateTo: "" };
+  })
   .handler(async ({ context, data }) => {
     const { CADASTRO_ID, NOTAS_ID } = await getUserSheetIds(context);
     const { lk, mk } = gw();
@@ -549,8 +560,17 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       } catch { monthCache.set(month, []); return []; }
     }
 
-    const query = encodeURIComponent(`subject:"Pagamento Pix recebido" newer_than:${data.days}d`);
-    const listRes = await fetch(`${GMAIL}/users/me/messages?maxResults=25&q=${query}`, {
+    let query = "";
+    if (data.dateFrom && data.dateTo) {
+      const fromParts = data.dateFrom.split("/");
+      const toParts = data.dateTo.split("/");
+      const gmailFrom = `${fromParts[2]}/${fromParts[1]}/${fromParts[0]}`;
+      const gmailTo = `${toParts[2]}/${toParts[1]}/${toParts[0]}`;
+      query = encodeURIComponent(`subject:"Pagamento Pix recebido" after:${gmailFrom} before:${gmailTo}`);
+    } else {
+      query = encodeURIComponent(`subject:"Pagamento Pix recebido" newer_than:${data.days}d`);
+    }
+    const listRes = await fetch(`${GMAIL}/users/me/messages?maxResults=50&q=${query}`, {
       headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": mk },
     });
     if (!listRes.ok) throw new Error(`Gmail busca falhou ${listRes.status}: ${await listRes.text()}`);
