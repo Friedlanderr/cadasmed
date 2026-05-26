@@ -93,6 +93,7 @@ function Index() {
   const [editEmail, setEditEmail] = useState({ to: "", subject: "", body: "" });
   const [editRow, setEditRow] = useState<string[]>([]);
   const [sent, setSent] = useState<Set<string>>(new Set());
+  const [hideSent, setHideSent] = useState(false);
 
   const procMut = useMutation({
     mutationFn: async (inv: Invoice) => process({ data: { fileId: inv.id, fileName: inv.name } }),
@@ -177,12 +178,18 @@ function Index() {
           </div>
         </div>
 
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-2">
           <h2 className="text-2xl font-semibold">Notas em {activeMonth || "—"}</h2>
-          <button onClick={() => refetch()} disabled={isFetching || !activeCfg}
-            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
-            {isFetching ? "Atualizando…" : "Atualizar"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setHideSent((v) => !v)}
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted">
+              {hideSent ? "Mostrar enviadas" : "Ocultar enviadas"}
+            </button>
+            <button onClick={() => refetch()} disabled={isFetching || !activeCfg}
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
+              {isFetching ? "Atualizando…" : "Atualizar"}
+            </button>
+          </div>
         </div>
 
         {!activeCfg && !needsSettings && (
@@ -198,7 +205,7 @@ function Index() {
         )}
 
         <div className="grid gap-3">
-          {data?.files.map((f) => {
+          {data?.files.filter((f) => !hideSent || !sent.has(f.id)).map((f) => {
             const isSent = sent.has(f.id);
             return (
               <div key={f.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
