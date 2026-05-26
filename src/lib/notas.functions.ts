@@ -82,6 +82,39 @@ async function sheetAppend(spreadsheetId: string, range: string, values: any[][]
   return res.json();
 }
 
+async function sheetUpdate(spreadsheetId: string, range: string, values: any[][]) {
+  const { lk, sk } = gw();
+  const res = await fetch(
+    `${SHEETS}/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk },
+      body: JSON.stringify({ values }),
+    },
+  );
+  if (!res.ok) throw new Error(`Sheets update falhou ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function findRowInMonth(NOTAS_ID: string, sheetName: string, nome: string, competencia: string) {
+  const data = await sheetValues(NOTAS_ID, `${sheetName}!A2:K1000`);
+  const rows = data.values ?? [];
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[1]) continue;
+    const nameScore = nameSimilarity(nome, r[1] ?? "");
+    const dateMatch = (r[0] ?? "").trim() === competencia.trim();
+    const score = nameScore + (dateMatch ? 0.5 : 0);
+    if (score > bestScore && nameScore >= 0.5) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx === -1 ? null : { rowNumber: bestIdx + 2, currentRow: rows[bestIdx] };
+}
+
 async function fetchSheetMeta(NOTAS_ID: string) {
   const { lk, sk } = gw();
   const res = await fetch(
