@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import {
   listInvoices, processInvoice, confirmSend, listSheetTabs,
-  parsePatientText, savePatient,
+  parsePatientText, savePatient, createMonthTab,
 } from "@/lib/notas.functions";
 
 export const Route = createFileRoute("/")({
