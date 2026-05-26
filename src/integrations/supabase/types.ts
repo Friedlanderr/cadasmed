@@ -66,7 +66,7 @@ export type Database = {
         Row: {
           cadastro_sheet_id: string
           created_at: string
-          email_search_term: string | null
+          email_search_terms: string[]
           month_folders: Json
           notas_sheet_id: string
           updated_at: string
@@ -75,7 +75,7 @@ export type Database = {
         Insert: {
           cadastro_sheet_id?: string
           created_at?: string
-          email_search_term?: string | null
+          email_search_terms?: string[]
           month_folders?: Json
           notas_sheet_id?: string
           updated_at?: string
@@ -84,7 +84,7 @@ export type Database = {
         Update: {
           cadastro_sheet_id?: string
           created_at?: string
-          email_search_term?: string | null
+          email_search_terms?: string[]
           month_folders?: Json
           notas_sheet_id?: string
           updated_at?: string

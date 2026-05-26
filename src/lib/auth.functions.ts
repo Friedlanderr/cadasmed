@@ -11,9 +11,11 @@ export const getMe = createServerFn({ method: "GET" })
     const [profileRes, rolesRes, settingsRes] = await Promise.all([
       supabase.from("profiles").select("email,display_name").eq("user_id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("user_settings").select("cadastro_sheet_id,notas_sheet_id,month_folders,email_search_term").eq("user_id", userId).maybeSingle(),
+      supabase.from("user_settings").select("cadastro_sheet_id,notas_sheet_id,month_folders,email_search_terms").eq("user_id", userId).maybeSingle(),
     ]);
     const roles = (rolesRes.data ?? []).map((r) => r.role as string);
+    const rawTerms = settingsRes.data?.email_search_terms;
+    const terms = Array.isArray(rawTerms) && rawTerms.length > 0 ? rawTerms : ["Pagamento Pix recebido"];
     return {
       userId,
       email: profileRes.data?.email ?? "",
@@ -23,7 +25,7 @@ export const getMe = createServerFn({ method: "GET" })
         cadastro_sheet_id: settingsRes.data?.cadastro_sheet_id ?? "",
         notas_sheet_id: settingsRes.data?.notas_sheet_id ?? "",
         month_folders: (settingsRes.data?.month_folders ?? []) as MonthFolder[],
-        email_search_term: settingsRes.data?.email_search_term ?? "Pagamento Pix recebido",
+        email_search_terms: terms,
       },
     };
   });
@@ -34,7 +36,7 @@ export const updateSettings = createServerFn({ method: "POST" })
     cadastro_sheet_id?: string;
     notas_sheet_id?: string;
     month_folders?: MonthFolder[];
-    email_search_term?: string;
+    email_search_terms?: string[];
   }) => d)
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
@@ -42,12 +44,17 @@ export const updateSettings = createServerFn({ method: "POST" })
       cadastro_sheet_id?: string;
       notas_sheet_id?: string;
       month_folders?: MonthFolder[];
-      email_search_term?: string;
+      email_search_terms?: string[];
     } = {};
     if (typeof data.cadastro_sheet_id === "string") patch.cadastro_sheet_id = data.cadastro_sheet_id.trim();
     if (typeof data.notas_sheet_id === "string") patch.notas_sheet_id = data.notas_sheet_id.trim();
     if (Array.isArray(data.month_folders)) patch.month_folders = data.month_folders;
-    if (typeof data.email_search_term === "string") patch.email_search_term = data.email_search_term.trim();
+    if (Array.isArray(data.email_search_terms)) {
+      const cleaned = data.email_search_terms
+        .map((t) => typeof t === "string" ? t.trim() : "")
+        .filter((t) => t.length > 0 && t.length <= 200);
+      patch.email_search_terms = cleaned.length > 0 ? cleaned : ["Pagamento Pix recebido"];
+    }
     const { error } = await supabase.from("user_settings").update(patch).eq("user_id", userId);
     if (error) throw new Error(error.message);
     return { success: true };

@@ -23,7 +23,8 @@ function SettingsPage() {
 
   const [cadastro, setCadastro] = useState("");
   const [notas, setNotas] = useState("");
-  const [emailTerm, setEmailTerm] = useState("");
+  const [emailTerms, setEmailTerms] = useState<string[]>([]);
+  const [emailInput, setEmailInput] = useState("");
   const [saved, setSaved] = useState(false);
 
   const [pw, setPw] = useState("");
@@ -49,18 +50,31 @@ function SettingsPage() {
     if (me.data) {
       setCadastro(me.data.settings.cadastro_sheet_id);
       setNotas(me.data.settings.notas_sheet_id);
-      setEmailTerm(me.data.settings.email_search_term);
+      setEmailTerms(me.data.settings.email_search_terms);
     }
   }, [me.data]);
 
   const saveMut = useMutation({
-    mutationFn: async () => save({ data: { cadastro_sheet_id: extractSheetId(cadastro), notas_sheet_id: extractSheetId(notas), email_search_term: emailTerm } }),
+    mutationFn: async () => save({ data: { cadastro_sheet_id: extractSheetId(cadastro), notas_sheet_id: extractSheetId(notas), email_search_terms: emailTerms } }),
     onSuccess: () => {
       setSaved(true);
       qc.invalidateQueries({ queryKey: ["me"] });
       setTimeout(() => setSaved(false), 2500);
     },
   });
+
+  function addTerm() {
+    const t = emailInput.trim();
+    if (!t) return;
+    if (emailTerms.includes(t)) return;
+    if (t.length > 200) return;
+    setEmailTerms((prev) => [...prev, t]);
+    setEmailInput("");
+  }
+
+  function removeTerm(term: string) {
+    setEmailTerms((prev) => prev.filter((x) => x !== term));
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -86,13 +100,44 @@ function SettingsPage() {
             className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" />
         </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Termo de busca nos emails</span>
-          <p className="text-xs text-muted-foreground mt-0.5">Assunto usado para encontrar emails de pagamento no Gmail. Padrão: "Pagamento Pix recebido".</p>
-          <input value={emailTerm} onChange={(e) => setEmailTerm(e.target.value)}
-            placeholder="Ex: Pagamento Pix recebido"
-            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-        </label>
+        <div className="block">
+          <span className="text-sm font-medium">Termos de busca nos emails</span>
+          <p className="text-xs text-muted-foreground mt-0.5">Assuntos usados para encontrar emails de pagamento no Gmail. Padrão: "Pagamento Pix recebido".</p>
+          
+          <div className="mt-2 flex gap-2">
+            <input
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTerm(); } }}
+              placeholder="Ex: Pagamento Pix recebido"
+              className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+            <button
+              onClick={addTerm}
+              disabled={!emailInput.trim() || emailInput.trim().length > 200}
+              className="rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              Adicionar
+            </button>
+          </div>
+
+          {emailTerms.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {emailTerms.map((term) => (
+                <span key={term} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  {term}
+                  <button
+                    onClick={() => removeTerm(term)}
+                    className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20 text-[10px] text-primary hover:bg-primary/30"
+                    aria-label={`Remover ${term}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-3 pt-2">
           <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
