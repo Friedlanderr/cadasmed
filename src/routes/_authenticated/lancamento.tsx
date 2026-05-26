@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
-import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab } from "@/lib/notas.functions";
+import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab, scanInterPayments } from "@/lib/notas.functions";
 import { getMe } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/_authenticated/lancamento")({
@@ -37,6 +37,7 @@ function LancamentoPage() {
   const tabsFn = useServerFn(listSheetTabs);
   const lancarFn = useServerFn(lancarPagamento);
   const createTab = useServerFn(createMonthTab);
+  const scanFn = useServerFn(scanInterPayments);
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const needsSettings = !!me.data && (!me.data.settings.cadastro_sheet_id || !me.data.settings.notas_sheet_id);
@@ -55,6 +56,7 @@ function LancamentoPage() {
   const [emitirEm, setEmitirEm] = useState<"paciente" | "pagante">("paciente");
   const [mes, setMes] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  const [scanDays, setScanDays] = useState(30);
 
   useEffect(() => {
     const m = monthFromBR(dataPag);
@@ -117,6 +119,40 @@ function LancamentoPage() {
     },
   });
 
+  const scanMut = useMutation({
+    mutationFn: async () => scanFn({ data: { days: scanDays } }),
+  });
+
+  function applySuggestion(s: any) {
+    const m = s.match;
+    if (m.source === "cadastro") {
+      setPacienteSel({
+        nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email,
+        descricao: m.descricao, valor_consulta: m.valor_consulta,
+      });
+      setPacienteQ(m.nome);
+      setPagSel(null); setPagQ(""); setEmitirEm("paciente");
+    } else if (m.source === "pagante") {
+      setPagSel({ nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email });
+      setPagQ(m.nome);
+      // try auto-match beneficiary in Cadastro
+      const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
+      const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+      if (benRow) { setPacienteSel(benRow); setPacienteQ(benRow.nome); }
+      setEmitirEm("paciente");
+    } else {
+      setPagSel({ nome: m.nome, cpf: "", cep: "", email: "" });
+      setPagQ(m.nome);
+    }
+    const v = (s.valor ?? "").replace(/[^\d,.]/g, "");
+    if (v) setValorPag(`R$ ${v}`);
+    if (s.date) setDataPag(s.date);
+    setOkMsg("Sugestão aplicada — confira os campos");
+    setTimeout(() => setOkMsg(""), 3000);
+  }
+
+
+
   if (needsSettings) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
@@ -133,6 +169,53 @@ function LancamentoPage() {
       <p className="mt-2 text-sm text-muted-foreground">
         Grava uma linha na planilha de Notas (com NF Emitida e NF Enviada em branco) para o contador emitir a nota.
       </p>
+
+      <div className="mt-6 rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <p className="text-sm font-medium">Varrer emails do Banco Inter</p>
+            <p className="text-xs text-muted-foreground">Busca "Pagamento Pix recebido" no Gmail e tenta casar com o Cadastro.</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Últimos
+              <input type="number" min={1} max={180} value={scanDays}
+                onChange={(e) => setScanDays(parseInt(e.target.value || "30", 10))}
+                className="mx-2 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm" />
+              dias
+            </label>
+            <button onClick={() => scanMut.mutate()} disabled={scanMut.isPending}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+              {scanMut.isPending ? "Buscando…" : "Buscar Pix recebidos"}
+            </button>
+          </div>
+        </div>
+        {scanMut.error && <p className="mt-3 text-sm text-destructive">{(scanMut.error as Error).message}</p>}
+        {scanMut.data && (
+          <div className="mt-4 space-y-2">
+            {scanMut.data.items.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum email encontrado no período.</p>
+            )}
+            {scanMut.data.items.map((s) => (
+              <div key={s.messageId} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{s.pagador} <span className="text-muted-foreground font-normal">· {s.valor || "—"} · {s.date}</span></p>
+                  <p className="text-xs text-muted-foreground">
+                    {s.match.source === "cadastro" && <>✓ Casou com paciente <strong>{s.match.nome}</strong></>}
+                    {s.match.source === "pagante" && <>✓ Casou com pagante <strong>{s.match.nome}</strong>{s.match.beneficiarioSugerido ? ` → benef. ${s.match.beneficiarioSugerido}` : ""}</>}
+                    {s.match.source === "none" && <span className="text-amber-700">Não encontrado no Cadastro</span>}
+                  </p>
+                </div>
+                <button onClick={() => applySuggestion(s)}
+                  className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted">
+                  Usar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+
 
       <div className="mt-8 space-y-5 rounded-xl border border-border bg-card p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
