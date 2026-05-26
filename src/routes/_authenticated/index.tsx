@@ -45,7 +45,7 @@ function Index() {
   const parseTxt = useServerFn(parsePatientText);
   const savePat = useServerFn(savePatient);
 
-  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const configs: MonthConfig[] = me.data?.settings.month_folders ?? [];
   const needsSettings = !!me.data && (!me.data.settings.cadastro_sheet_id || !me.data.settings.notas_sheet_id);
 
@@ -70,10 +70,11 @@ function Index() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["invoices", activeCfg?.folderId],
     queryFn: () => list({ data: { folderId: activeCfg!.folderId } }),
-    enabled: !!activeCfg?.folderId && !needsSettings,
+    enabled: me.isSuccess && !!activeCfg?.folderId && !needsSettings,
+    retry: false,
   });
 
-  const tabsQ = useQuery({ queryKey: ["tabs"], queryFn: () => tabs(), enabled: showSettings && !needsSettings });
+  const tabsQ = useQuery({ queryKey: ["tabs"], queryFn: () => tabs(), enabled: me.isSuccess && showSettings && !needsSettings, retry: false });
 
   const [newMonth, setNewMonth] = useState<string>("");
   const createTabMut = useMutation({
