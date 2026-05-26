@@ -138,7 +138,12 @@ function LancamentoPage() {
   });
 
   const scanMut = useMutation({
-    mutationFn: async () => scanFn({ data: { days: scanDays } }),
+    mutationFn: async () => {
+      if (scanMode === "range" && dateFrom && dateTo) {
+        return scanFn({ data: { dateFrom, dateTo } });
+      }
+      return scanFn({ data: { days: scanDays } });
+    },
     onSuccess: () => { setSelectedIds(new Set()); setBulkStatus({}); setBulkErr({}); },
   });
 
