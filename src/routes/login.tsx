@@ -21,9 +21,11 @@ function LoginPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) { setErr(error.message); return; }
+    // Supabase lança AuthWeakPasswordError quando a senha é considerada fraca (HIBP),
+    // mas a sessão É criada. Se temos sessão, prosseguimos.
+    if (error && !data?.session) { setErr(error.message); return; }
     nav({ to: "/" });
   }
 
