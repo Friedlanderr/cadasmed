@@ -124,7 +124,21 @@ function LancamentoPage() {
 
   const scanMut = useMutation({
     mutationFn: async () => scanFn({ data: { days: scanDays } }),
+    onSuccess: () => { setSelectedIds(new Set()); setBulkStatus({}); setBulkErr({}); },
   });
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  function toggleAll() {
+    const items = scanMut.data?.items ?? [];
+    setSelectedIds((prev) => prev.size === items.length ? new Set() : new Set(items.map((i) => i.messageId)));
+  }
 
   function applySuggestion(s: any) {
     const m = s.match;
@@ -138,7 +152,6 @@ function LancamentoPage() {
     } else if (m.source === "pagante") {
       setPagSel({ nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email });
       setPagQ(m.nome);
-      // try auto-match beneficiary in Cadastro
       const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
       const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
       if (benRow) { setPacienteSel(benRow); setPacienteQ(benRow.nome); }
@@ -153,6 +166,65 @@ function LancamentoPage() {
     setOkMsg("Sugestão aplicada — confira os campos");
     setTimeout(() => setOkMsg(""), 3000);
   }
+
+  const bulkMut = useMutation({
+    mutationFn: async () => {
+      const items = (scanMut.data?.items ?? []).filter((i) => selectedIds.has(i.messageId));
+      const status: Record<string, "pending" | "ok" | "skip" | "err"> = {};
+      const errs: Record<string, string> = {};
+      for (const s of items) status[s.messageId] = "pending";
+      setBulkStatus({ ...status }); setBulkErr({});
+
+      for (const s of items) {
+        try {
+          const m: any = s.match;
+          if (m.source === "none") { status[s.messageId] = "skip"; errs[s.messageId] = "Sem correspondência"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
+
+          let paciente: any = null;
+          let pagante: any = null;
+          if (m.source === "cadastro") {
+            paciente = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email, descricao: m.descricao, valor_consulta: m.valor_consulta };
+          } else if (m.source === "pagante") {
+            pagante = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email };
+            const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
+            const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+            if (benRow) paciente = benRow;
+          }
+          if (!paciente) { status[s.messageId] = "skip"; errs[s.messageId] = "Beneficiário não localizado"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
+
+          const dataP = s.date || todayBR();
+          const mesDest = monthFromBR(dataP);
+          if (!mesDest) { status[s.messageId] = "err"; errs[s.messageId] = "Data inválida"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
+          if (!tabsQ.data?.tabs.includes(mesDest)) {
+            await createTab({ data: { month: mesDest } });
+            await qc.invalidateQueries({ queryKey: ["tabs"] });
+          }
+          const v = (s.valor ?? "").replace(/[^\d,.]/g, "");
+          const target = pagante ?? paciente;
+          const obsFinal = pagante ? `Beneficiário: ${paciente.nome}` : "";
+
+          await lancarFn({
+            data: {
+              data_pagamento: dataP,
+              sheetName: mesDest,
+              nome: target.nome,
+              cpf: target.cpf ?? "",
+              cep: target.cep ?? "",
+              email: target.email ?? "",
+              descricao: paciente.descricao || "Consulta Psiquiatria",
+              valor_consulta: paciente.valor_consulta ?? "",
+              valor_pagamento: v ? `R$ ${v}` : "",
+              observacao: obsFinal,
+            },
+          });
+          status[s.messageId] = "ok"; setBulkStatus({ ...status });
+        } catch (e: any) {
+          status[s.messageId] = "err"; errs[s.messageId] = e?.message ?? "Erro"; setBulkStatus({ ...status }); setBulkErr({ ...errs });
+        }
+      }
+      return { done: true };
+    },
+  });
 
 
 
