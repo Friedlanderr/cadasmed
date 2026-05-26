@@ -142,25 +142,49 @@ export const createMonthTab = createServerFn({ method: "POST" })
       }),
     });
     if (!addRes.ok) throw new Error(`Criar aba falhou ${addRes.status}: ${await addRes.text()}`);
+    const addJson = (await addRes.json()) as {
+      replies: Array<{ addSheet?: { properties: { sheetId: number } } }>;
+    };
+    const newSheetId = addJson.replies?.[0]?.addSheet?.properties.sheetId;
 
-    // 2) copia o cabeçalho da aba-fonte (linhas 1 e 2, A:K)
-    if (source) {
-      const header = await sheetValues(NOTAS_ID, `${source}!A1:K2`);
-      const headerRows = header.values ?? [];
-      if (headerRows.length > 0) {
-        const putRes = await fetch(
-          `${SHEETS}/spreadsheets/${NOTAS_ID}/values/${data.month}!A1?valueInputOption=USER_ENTERED`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${lk}`,
-              "X-Connection-Api-Key": sk,
-            },
-            body: JSON.stringify({ values: headerRows }),
+    // 2) copia o cabeçalho (valores + formatação) das linhas 1 e 2 da aba-fonte
+    if (source && newSheetId != null) {
+      const sourceSheetId = meta.sheets.find((s) => s.properties.title === source)
+        ?.properties.sheetId;
+      if (sourceSheetId != null) {
+        const copyRes = await fetch(`${SHEETS}/spreadsheets/${NOTAS_ID}:batchUpdate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${lk}`,
+            "X-Connection-Api-Key": sk,
           },
-        );
-        if (!putRes.ok) throw new Error(`Cabeçalho falhou ${putRes.status}: ${await putRes.text()}`);
+          body: JSON.stringify({
+            requests: [
+              {
+                copyPaste: {
+                  source: {
+                    sheetId: sourceSheetId,
+                    startRowIndex: 0,
+                    endRowIndex: 2,
+                    startColumnIndex: 0,
+                    endColumnIndex: 11,
+                  },
+                  destination: {
+                    sheetId: newSheetId,
+                    startRowIndex: 0,
+                    endRowIndex: 2,
+                    startColumnIndex: 0,
+                    endColumnIndex: 11,
+                  },
+                  pasteType: "PASTE_NORMAL",
+                  pasteOrientation: "NORMAL",
+                },
+              },
+            ],
+          }),
+        });
+        if (!copyRes.ok) throw new Error(`Cabeçalho falhou ${copyRes.status}: ${await copyRes.text()}`);
       }
     }
 
