@@ -650,9 +650,22 @@ export const scanInterPayments = createServerFn({ method: "POST" })
         };
       }
 
+      // Detect if already lançado on destination month sheet
+      const destMonth = monthFromBR(date);
+      const checkName = match.source === "pagante" ? (match.nome) : match.nome;
+      let alreadyInSheet = false;
+      if (destMonth && checkName) {
+        const rows = await getMonthRows(destMonth);
+        for (const r of rows) {
+          if (!r[1]) continue;
+          if (nameSimilarity(checkName, r[1]) >= 0.7) { alreadyInSheet = true; break; }
+        }
+      }
+
       results.push({
         messageId: id, date,
         pagador: parsed.pagador, valor: parsed.valor,
+        alreadyInSheet,
         match,
       });
     }
