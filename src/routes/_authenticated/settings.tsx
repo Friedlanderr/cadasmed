@@ -23,6 +23,7 @@ function SettingsPage() {
 
   const [cadastro, setCadastro] = useState("");
   const [notas, setNotas] = useState("");
+  const [emailTerm, setEmailTerm] = useState("");
   const [saved, setSaved] = useState(false);
 
   const [pw, setPw] = useState("");
@@ -48,11 +49,12 @@ function SettingsPage() {
     if (me.data) {
       setCadastro(me.data.settings.cadastro_sheet_id);
       setNotas(me.data.settings.notas_sheet_id);
+      setEmailTerm(me.data.settings.email_search_term);
     }
   }, [me.data]);
 
   const saveMut = useMutation({
-    mutationFn: async () => save({ data: { cadastro_sheet_id: extractSheetId(cadastro), notas_sheet_id: extractSheetId(notas) } }),
+    mutationFn: async () => save({ data: { cadastro_sheet_id: extractSheetId(cadastro), notas_sheet_id: extractSheetId(notas), email_search_term: emailTerm } }),
     onSuccess: () => {
       setSaved(true);
       qc.invalidateQueries({ queryKey: ["me"] });
