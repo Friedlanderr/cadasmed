@@ -23,7 +23,7 @@ function gw() {
 async function getUserSheetIds(ctx: { supabase: any; userId: string }) {
   const { data, error } = await ctx.supabase
     .from("user_settings")
-    .select("cadastro_sheet_id,notas_sheet_id,email_search_term")
+    .select("cadastro_sheet_id,notas_sheet_id,email_search_terms")
     .eq("user_id", ctx.userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -32,7 +32,11 @@ async function getUserSheetIds(ctx: { supabase: any; userId: string }) {
   if (!cad || !not) {
     throw new Error("Configure as planilhas Cadastro e Notas em 'Configurações' antes de continuar.");
   }
-  return { CADASTRO_ID: cad, NOTAS_ID: not, EMAIL_TERM: (data?.email_search_term ?? "Pagamento Pix recebido").trim() };
+  const rawTerms = data?.email_search_terms;
+  const terms = Array.isArray(rawTerms) && rawTerms.length > 0
+    ? rawTerms.map((t: string) => t.trim()).filter((t: string) => t.length > 0)
+    : ["Pagamento Pix recebido"];
+  return { CADASTRO_ID: cad, NOTAS_ID: not, EMAIL_TERMS: terms };
 }
 
 function normalize(s: string) {
