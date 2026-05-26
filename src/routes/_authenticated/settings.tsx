@@ -86,6 +86,14 @@ function SettingsPage() {
             className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" />
         </label>
 
+        <label className="block">
+          <span className="text-sm font-medium">Termo de busca nos emails</span>
+          <p className="text-xs text-muted-foreground mt-0.5">Assunto usado para encontrar emails de pagamento no Gmail. Padrão: "Pagamento Pix recebido".</p>
+          <input value={emailTerm} onChange={(e) => setEmailTerm(e.target.value)}
+            placeholder="Ex: Pagamento Pix recebido"
+            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        </label>
+
         <div className="flex items-center gap-3 pt-2">
           <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
             className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
