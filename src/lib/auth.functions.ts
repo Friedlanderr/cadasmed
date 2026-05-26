@@ -11,7 +11,7 @@ export const getMe = createServerFn({ method: "GET" })
     const [profileRes, rolesRes, settingsRes] = await Promise.all([
       supabase.from("profiles").select("email,display_name").eq("user_id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("user_settings").select("cadastro_sheet_id,notas_sheet_id,month_folders").eq("user_id", userId).maybeSingle(),
+      supabase.from("user_settings").select("cadastro_sheet_id,notas_sheet_id,month_folders,email_search_term").eq("user_id", userId).maybeSingle(),
     ]);
     const roles = (rolesRes.data ?? []).map((r) => r.role as string);
     return {
@@ -23,6 +23,7 @@ export const getMe = createServerFn({ method: "GET" })
         cadastro_sheet_id: settingsRes.data?.cadastro_sheet_id ?? "",
         notas_sheet_id: settingsRes.data?.notas_sheet_id ?? "",
         month_folders: (settingsRes.data?.month_folders ?? []) as MonthFolder[],
+        email_search_term: settingsRes.data?.email_search_term ?? "Pagamento Pix recebido",
       },
     };
   });
