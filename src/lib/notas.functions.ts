@@ -494,3 +494,158 @@ export const lancarPagamento = createServerFn({ method: "POST" })
     await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [row]);
     return { success: true };
   });
+
+// ---------------- Varredura de Pix recebido no Gmail (Banco Inter) ----------------
+
+function b64urlDecode(s: string): string {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4);
+  try {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+function extractText(payload: any): string {
+  if (!payload) return "";
+  const parts: string[] = [];
+  const walk = (p: any) => {
+    if (!p) return;
+    const mt = p.mimeType ?? "";
+    if (p.body?.data && (mt.startsWith("text/") || mt === "")) {
+      parts.push(b64urlDecode(p.body.data));
+    }
+    if (Array.isArray(p.parts)) p.parts.forEach(walk);
+  };
+  walk(payload);
+  // strip HTML tags
+  return parts.join("\n").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function gmailDateToBR(internalDateMs: string | number): string {
+  const d = new Date(Number(internalDateMs));
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
+export const scanInterPayments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { days?: number } | undefined) => ({ days: d?.days ?? 30 }))
+  .handler(async ({ context, data }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    const { lk, mk } = gw();
+
+    const query = encodeURIComponent(`subject:"Pagamento Pix recebido" newer_than:${data.days}d`);
+    const listRes = await fetch(`${GMAIL}/users/me/messages?maxResults=25&q=${query}`, {
+      headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": mk },
+    });
+    if (!listRes.ok) throw new Error(`Gmail busca falhou ${listRes.status}: ${await listRes.text()}`);
+    const list = (await listRes.json()) as { messages?: Array<{ id: string }> };
+    const ids = (list.messages ?? []).map((m) => m.id);
+
+    // Load Cadastro + Pagantes once
+    const cad = await sheetValues(CADASTRO_ID, "Cadastro!A2:H1000");
+    const cadRows = (cad.values ?? []).filter((r) => r[0]);
+    let pagRows: string[][] = [];
+    try {
+      const pag = await sheetValues(CADASTRO_ID, "'Dados pagantes não pacientes'!A2:H1000");
+      pagRows = (pag.values ?? []).filter((r) => r[1]);
+    } catch {}
+
+    const results: Array<{
+      messageId: string;
+      date: string;
+      pagador: string;
+      valor: string;
+      match: {
+        source: "cadastro" | "pagante" | "none";
+        score: number;
+        nome: string; cpf: string; cep: string; email: string;
+        descricao: string; valor_consulta: string;
+        beneficiarioSugerido?: string;
+      };
+    }> = [];
+
+    for (const id of ids) {
+      const mRes = await fetch(`${GMAIL}/users/me/messages/${id}?format=full`, {
+        headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": mk },
+      });
+      if (!mRes.ok) continue;
+      const msg = (await mRes.json()) as any;
+      const text = extractText(msg.payload).slice(0, 4000);
+      if (!text) continue;
+
+      // AI extract
+      const aiRes = await fetch(AI, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}` },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [{
+            role: "user",
+            content: `Este é o corpo de um email do Banco Inter sobre um Pix recebido. Extraia em JSON com chaves exatas: "pagador" (nome completo de quem enviou o Pix), "valor" (string como "R$ 400,00"). Se não conseguir, retorne {"pagador":"","valor":""}. Retorne APENAS o JSON.\n\nEMAIL:\n${text}`,
+          }],
+        }),
+      });
+      if (!aiRes.ok) continue;
+      const aiJson = (await aiRes.json()) as any;
+      const raw: string = aiJson.choices?.[0]?.message?.content ?? "";
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (!m) continue;
+      let parsed: { pagador: string; valor: string };
+      try { parsed = JSON.parse(m[0]); } catch { continue; }
+      if (!parsed.pagador?.trim()) continue;
+
+      // Match against Cadastro
+      let bestCad: { score: number; row: string[] | null } = { score: 0, row: null };
+      for (const r of cadRows) {
+        const score = nameSimilarity(parsed.pagador, r[0] ?? "");
+        if (score > bestCad.score) bestCad = { score, row: r };
+      }
+      let bestPag: { score: number; row: string[] | null } = { score: 0, row: null };
+      for (const r of pagRows) {
+        const score = nameSimilarity(parsed.pagador, r[1] ?? "");
+        if (score > bestPag.score) bestPag = { score, row: r };
+      }
+
+      const date = gmailDateToBR(msg.internalDate);
+      let match: any;
+      if (bestCad.score >= 0.5 && bestCad.score >= bestPag.score) {
+        const r = bestCad.row!;
+        match = {
+          source: "cadastro", score: bestCad.score,
+          nome: r[0] ?? "", cpf: r[1] ?? "", cep: r[2] ?? "", email: r[3] ?? "",
+          descricao: r[4] ?? "Consulta Psiquiatria",
+          valor_consulta: r[5] ?? "",
+        };
+      } else if (bestPag.score >= 0.5) {
+        const r = bestPag.row!;
+        match = {
+          source: "pagante", score: bestPag.score,
+          nome: r[1] ?? "", cpf: r[3] ?? "", cep: r[4] ?? "", email: r[5] ?? "",
+          descricao: r[6] ?? "Consulta Psiquiatria",
+          valor_consulta: "",
+          beneficiarioSugerido: r[2] ?? "",
+        };
+      } else {
+        match = {
+          source: "none", score: 0,
+          nome: parsed.pagador, cpf: "", cep: "", email: "",
+          descricao: "Consulta Psiquiatria", valor_consulta: "",
+        };
+      }
+
+      results.push({
+        messageId: id, date,
+        pagador: parsed.pagador, valor: parsed.valor,
+        match,
+      });
+    }
+
+    return { items: results };
+  });
+
