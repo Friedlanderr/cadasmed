@@ -339,24 +339,55 @@ export const processInvoice = createServerFn({ method: "POST" })
     };
   });
 
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+const DRIVE_ID_RE = /^[A-Za-z0-9_-]{10,128}$/;
+
 export const confirmSend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     sheetRow: string[]; sheetName: string;
     email: { to: string; subject: string; body: string };
-    pdfBase64: string; fileName: string;
-  }) => d)
+    fileId: string; fileName: string;
+  }) => {
+    if (!d || typeof d !== "object") throw new Error("Payload inválido");
+    if (!Array.isArray(d.sheetRow) || d.sheetRow.length > 16) throw new Error("sheetRow inválido");
+    for (const v of d.sheetRow) {
+      if (typeof v !== "string" || v.length > 500) throw new Error("Conteúdo da linha inválido");
+    }
+    if (!MONTHS_PT.includes(d.sheetName)) throw new Error("Mês de destino inválido");
+    if (!d.email || typeof d.email !== "object") throw new Error("Email inválido");
+    const to = String(d.email.to ?? "").trim();
+    if (!EMAIL_RE.test(to)) throw new Error("Email do paciente ausente ou inválido");
+    const subject = String(d.email.subject ?? "");
+    const body = String(d.email.body ?? "");
+    if (subject.length > 300 || body.length > 5000) throw new Error("Conteúdo do email excede o limite");
+    if (!DRIVE_ID_RE.test(String(d.fileId ?? ""))) throw new Error("fileId inválido");
+    const fileName = String(d.fileName ?? "arquivo.pdf");
+    if (fileName.length > 200) throw new Error("Nome do arquivo muito longo");
+    return {
+      sheetRow: d.sheetRow,
+      sheetName: d.sheetName,
+      email: { to, subject, body },
+      fileId: d.fileId,
+      fileName,
+    };
+  })
   .handler(async ({ context, data }) => {
     const { NOTAS_ID } = await getUserSheetIds(context);
-    if (!data.email.to || !data.email.to.includes("@")) throw new Error("Email do paciente ausente ou inválido");
-    if (!data.sheetName) throw new Error("Mês de destino não informado");
+
+    // Re-download do PDF a partir do Drive (servidor); não confia em base64 do cliente.
+    const pdfBase64 = await driveDownload(data.fileId);
 
     const { lk, mk } = gw();
     const boundary = `b_${Math.random().toString(36).slice(2)}`;
-    const safeName = data.fileName.replace(/[\r\n"]/g, "_");
+    // Sanitiza para evitar header injection (CRLF) e quebra do MIME
+    const safeName = data.fileName.replace(/[\r\n"\\]/g, "_");
+    const safeTo = data.email.to.replace(/[\r\n,<>]/g, "");
+    const safeSubject = data.email.subject.replace(/[\r\n]/g, " ");
+    const safeBody = data.email.body.replace(/\r/g, "");
     const mime = [
-      `To: ${data.email.to}`,
-      `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(data.email.subject)))}?=`,
+      `To: ${safeTo}`,
+      `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(safeSubject)))}?=`,
       "MIME-Version: 1.0",
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
       "",
@@ -364,14 +395,14 @@ export const confirmSend = createServerFn({ method: "POST" })
       'Content-Type: text/plain; charset="UTF-8"',
       "Content-Transfer-Encoding: 7bit",
       "",
-      data.email.body,
+      safeBody,
       "",
       `--${boundary}`,
       `Content-Type: application/pdf; name="${safeName}"`,
       "Content-Transfer-Encoding: base64",
       `Content-Disposition: attachment; filename="${safeName}"`,
       "",
-      data.pdfBase64,
+      pdfBase64,
       `--${boundary}--`,
     ].join("\r\n");
 
@@ -382,13 +413,16 @@ export const confirmSend = createServerFn({ method: "POST" })
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": mk },
       body: JSON.stringify({ raw }),
     });
-    if (!gRes.ok) throw new Error(`Gmail falhou ${gRes.status}: ${await gRes.text()}`);
+    if (!gRes.ok) {
+      const txt = await gRes.text();
+      console.error("Gmail send failed", gRes.status, txt);
+      throw new Error(`Falha ao enviar email (${gRes.status})`);
+    }
 
     const nome = data.sheetRow[1] ?? "";
     const competencia = data.sheetRow[0] ?? "";
     const found = await findRowInMonth(NOTAS_ID, data.sheetName, nome, competencia);
     if (found) {
-      // mantém NF Emitida atual (ou marca X se vazio) e marca NF Enviada = X
       const jVal = (found.currentRow[9] ?? "").trim() || "X";
       await sheetUpdate(NOTAS_ID, `${data.sheetName}!J${found.rowNumber}:K${found.rowNumber}`, [[jVal, "X"]]);
       return { success: true, updated: true, rowNumber: found.rowNumber };
