@@ -383,7 +383,7 @@ function LancamentoPage() {
           </label>
         </div>
 
-        <div>
+        <div ref={pacienteRef}>
           <span className="text-sm font-medium">Paciente</span>
           {pacienteSel ? (
             <div className="mt-1 flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
