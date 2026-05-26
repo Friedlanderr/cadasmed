@@ -57,6 +57,9 @@ function LancamentoPage() {
   const [mes, setMes] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const [scanDays, setScanDays] = useState(15);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<Record<string, "pending" | "ok" | "skip" | "err">>({});
+  const [bulkErr, setBulkErr] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const m = monthFromBR(dataPag);
