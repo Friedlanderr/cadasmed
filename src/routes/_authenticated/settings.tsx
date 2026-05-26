@@ -93,6 +93,30 @@ function SettingsPage() {
           {saveMut.error && <span className="text-sm text-destructive">{(saveMut.error as Error).message}</span>}
         </div>
       </div>
+
+      <div className="mt-8 space-y-5 rounded-xl border border-border bg-card p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Alterar senha</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Defina uma nova senha de acesso (mínimo 8 caracteres).</p>
+        </div>
+        <label className="block">
+          <span className="text-sm font-medium">Nova senha</span>
+          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password"
+            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium">Confirmar nova senha</span>
+          <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password"
+            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        </label>
+        <div className="flex items-center gap-3 pt-2">
+          <button onClick={() => pwMut.mutate()} disabled={pwMut.isPending || !pw || !pw2}
+            className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+            {pwMut.isPending ? "Alterando…" : "Alterar senha"}
+          </button>
+          {pwMsg && <span className={`text-sm ${pwMsg.type === "ok" ? "text-success" : "text-destructive"}`}>{pwMsg.text}</span>}
+        </div>
+      </div>
     </div>
   );
 }
