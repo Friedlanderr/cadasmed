@@ -93,8 +93,15 @@ function Index() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [editEmail, setEditEmail] = useState({ to: "", subject: "", body: "" });
   const [editRow, setEditRow] = useState<string[]>([]);
-  const [sent, setSent] = useState<Set<string>>(new Set());
   const [hideSent, setHideSent] = useState(false);
+
+  const sentQ = useQuery({
+    queryKey: ["sent-invoices"],
+    queryFn: () => sentFn(),
+    enabled: me.isSuccess && !needsSettings,
+    retry: false,
+  });
+  const sent = useMemo(() => new Set(sentQ.data?.fileIds ?? []), [sentQ.data]);
 
   const procMut = useMutation({
     mutationFn: async (inv: Invoice) => process({ data: { fileId: inv.id, fileName: inv.name } }),
