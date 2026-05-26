@@ -36,7 +36,11 @@ export const updateSettings = createServerFn({ method: "POST" })
   }) => d)
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      cadastro_sheet_id?: string;
+      notas_sheet_id?: string;
+      month_folders?: MonthFolder[];
+    } = {};
     if (typeof data.cadastro_sheet_id === "string") patch.cadastro_sheet_id = data.cadastro_sheet_id.trim();
     if (typeof data.notas_sheet_id === "string") patch.notas_sheet_id = data.notas_sheet_id.trim();
     if (Array.isArray(data.month_folders)) patch.month_folders = data.month_folders;
