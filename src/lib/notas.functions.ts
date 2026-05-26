@@ -94,7 +94,10 @@ export const listSheetTabs = createServerFn({ method: "GET" }).handler(async () 
 });
 
 export const listInvoices = createServerFn({ method: "POST" })
-  .inputValidator((d: { folderId: string }) => d)
+  .inputValidator((d: { folderId: string } | undefined) => {
+    if (!d?.folderId) throw new Error("folderId obrigatório");
+    return d;
+  })
   .handler(async ({ data }) => {
     const { lk, dk } = gw();
     const q = encodeURIComponent(
