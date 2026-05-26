@@ -372,9 +372,18 @@ export const confirmSend = createServerFn({ method: "POST" })
     });
     if (!gRes.ok) throw new Error(`Gmail falhou ${gRes.status}: ${await gRes.text()}`);
 
-    const finalRow = [...data.sheetRow.slice(0, 9), "", "X"];
+    const nome = data.sheetRow[1] ?? "";
+    const competencia = data.sheetRow[0] ?? "";
+    const found = await findRowInMonth(NOTAS_ID, data.sheetName, nome, competencia);
+    if (found) {
+      // mantém NF Emitida atual (ou marca X se vazio) e marca NF Enviada = X
+      const jVal = (found.currentRow[9] ?? "").trim() || "X";
+      await sheetUpdate(NOTAS_ID, `${data.sheetName}!J${found.rowNumber}:K${found.rowNumber}`, [[jVal, "X"]]);
+      return { success: true, updated: true, rowNumber: found.rowNumber };
+    }
+    const finalRow = [...data.sheetRow.slice(0, 9), "X", "X"];
     await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [finalRow]);
-    return { success: true };
+    return { success: true, updated: false };
   });
 
 export const parsePatientText = createServerFn({ method: "POST" })
