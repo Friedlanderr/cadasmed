@@ -37,6 +37,7 @@ function LancamentoPage() {
   const tabsFn = useServerFn(listSheetTabs);
   const lancarFn = useServerFn(lancarPagamento);
   const createTab = useServerFn(createMonthTab);
+  const scanFn = useServerFn(scanInterPayments);
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const needsSettings = !!me.data && (!me.data.settings.cadastro_sheet_id || !me.data.settings.notas_sheet_id);
