@@ -536,8 +536,18 @@ export const scanInterPayments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { days?: number } | undefined) => ({ days: d?.days ?? 30 }))
   .handler(async ({ context, data }) => {
-    const { CADASTRO_ID } = await getUserSheetIds(context);
+    const { CADASTRO_ID, NOTAS_ID } = await getUserSheetIds(context);
     const { lk, mk } = gw();
+    const monthCache = new Map<string, string[][]>();
+    async function getMonthRows(month: string): Promise<string[][]> {
+      if (monthCache.has(month)) return monthCache.get(month)!;
+      try {
+        const d = await sheetValues(NOTAS_ID, `${month}!A2:K1000`);
+        const rows = d.values ?? [];
+        monthCache.set(month, rows);
+        return rows;
+      } catch { monthCache.set(month, []); return []; }
+    }
 
     const query = encodeURIComponent(`subject:"Pagamento Pix recebido" newer_than:${data.days}d`);
     const listRes = await fetch(`${GMAIL}/users/me/messages?maxResults=25&q=${query}`, {
@@ -561,6 +571,7 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       date: string;
       pagador: string;
       valor: string;
+      alreadyInSheet: boolean;
       match: {
         source: "cadastro" | "pagante" | "none";
         score: number;
@@ -639,9 +650,23 @@ export const scanInterPayments = createServerFn({ method: "POST" })
         };
       }
 
+      // Detect if already lançado on destination month sheet
+      const mIdx = parseInt((date.split("/")[1] ?? ""), 10) - 1;
+      const destMonth = mIdx >= 0 && mIdx < 12 ? MONTHS_PT[mIdx] : "";
+      const checkName = match.source === "pagante" ? (match.nome) : match.nome;
+      let alreadyInSheet = false;
+      if (destMonth && checkName) {
+        const rows = await getMonthRows(destMonth);
+        for (const r of rows) {
+          if (!r[1]) continue;
+          if (nameSimilarity(checkName, r[1]) >= 0.7) { alreadyInSheet = true; break; }
+        }
+      }
+
       results.push({
         messageId: id, date,
         pagador: parsed.pagador, valor: parsed.valor,
+        alreadyInSheet,
         match,
       });
     }

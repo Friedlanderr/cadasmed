@@ -308,7 +308,15 @@ function LancamentoPage() {
                     <p className="font-medium truncate">{s.pagador} <span className="text-muted-foreground font-normal">· {s.valor || "—"} · {s.date}</span></p>
                     <p className="text-xs text-muted-foreground">
                       {s.match.source === "cadastro" && <>✓ Casou com paciente <strong>{s.match.nome}</strong></>}
-                      {s.match.source === "pagante" && <>✓ Casou com pagante <strong>{s.match.nome}</strong>{s.match.beneficiarioSugerido ? ` → benef. ${s.match.beneficiarioSugerido}` : ""}</>}
+                      {s.match.source === "pagante" && (
+                        <>
+                          <span className="font-semibold text-primary">⚑ Pagante ≠ paciente</span>{" · "}
+                          <strong>{s.match.nome}</strong>
+                          {s.match.beneficiarioSugerido && (
+                            <> → <span className="font-semibold text-primary">benef. {s.match.beneficiarioSugerido}</span></>
+                          )}
+                        </>
+                      )}
                       {s.match.source === "none" && <span className="text-amber-700">Não encontrado no Cadastro</span>}
                     </p>
                     {st && (
@@ -320,6 +328,9 @@ function LancamentoPage() {
                       </p>
                     )}
                   </div>
+                  {s.alreadyInSheet && (
+                    <span title="Já consta na planilha de Notas" className="text-success text-base font-bold">✓</span>
+                  )}
                   <button onClick={() => applySuggestion(s)}
                     className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted">
                     Usar
