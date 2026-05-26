@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab, scanInterPayments } from "@/lib/notas.functions";
 import { getMe } from "@/lib/auth.functions";
 
