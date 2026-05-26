@@ -117,12 +117,24 @@ async function findRowInMonth(NOTAS_ID: string, sheetName: string, nome: string,
 
 async function fetchSheetMeta(NOTAS_ID: string) {
   const { lk, sk } = gw();
-  const res = await fetch(
-    `${SHEETS}/spreadsheets/${NOTAS_ID}?fields=sheets(properties(sheetId,title,index))`,
-    { headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk } },
-  );
-  if (!res.ok) throw new Error(`Sheets meta falhou ${res.status}: ${await res.text()}`);
-  return (await res.json()) as { sheets: Array<{ properties: { sheetId: number; title: string; index: number } }> };
+  const url = `${SHEETS}/spreadsheets/${NOTAS_ID}?fields=sheets(properties(sheetId,title,index))`;
+  let lastErr = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk },
+      });
+      if (res.ok) {
+        return (await res.json()) as { sheets: Array<{ properties: { sheetId: number; title: string; index: number } }> };
+      }
+      lastErr = `${res.status}: ${await res.text()}`;
+      if (res.status < 500 && res.status !== 429) break;
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e);
+    }
+    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+  }
+  throw new Error(`Sheets meta falhou ${lastErr}`);
 }
 
 export const listSheetTabs = createServerFn({ method: "GET" })
