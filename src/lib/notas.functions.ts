@@ -423,3 +423,74 @@ export const savePatient = createServerFn({ method: "POST" })
     ]]);
     return { success: true };
   });
+
+export const listCadastro = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    const res = await sheetValues(CADASTRO_ID, "Cadastro!A2:H1000");
+    const rows = (res.values ?? []).filter((r) => r[0]);
+    return {
+      items: rows.map((r) => ({
+        nome: r[0] ?? "", cpf: r[1] ?? "", cep: r[2] ?? "", email: r[3] ?? "",
+        descricao: r[4] ?? "Consulta Psiquiatria",
+        valor_consulta: r[5] ?? "", observacao: r[7] ?? "",
+      })),
+    };
+  });
+
+export const listPagantes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    try {
+      const res = await sheetValues(CADASTRO_ID, "'Dados pagantes não pacientes'!A2:H1000");
+      const rows = (res.values ?? []).filter((r) => r[1]);
+      return {
+        items: rows.map((r) => ({
+          tipo: r[0] ?? "", nome: r[1] ?? "", beneficiario: r[2] ?? "",
+          cpf: r[3] ?? "", cep: r[4] ?? "", email: r[5] ?? "",
+          descricao: r[6] ?? "Consulta Psiquiatria",
+        })),
+      };
+    } catch {
+      return { items: [] };
+    }
+  });
+
+export const savePagante = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    tipo?: string; nome: string; beneficiario: string; cpf: string;
+    cep: string; email: string; descricao: string;
+  }) => d)
+  .handler(async ({ context, data }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    if (!data.nome.trim()) throw new Error("Nome do pagante é obrigatório");
+    await sheetAppend(CADASTRO_ID, "'Dados pagantes não pacientes'!A:G", [[
+      data.tipo ?? "Pagante", data.nome, data.beneficiario,
+      data.cpf, data.cep, data.email, data.descricao,
+    ]]);
+    return { success: true };
+  });
+
+export const lancarPagamento = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    data_pagamento: string; sheetName: string;
+    nome: string; cpf: string; cep: string; email: string;
+    descricao: string; valor_consulta: string; valor_pagamento: string;
+    observacao: string;
+  }) => d)
+  .handler(async ({ context, data }) => {
+    const { NOTAS_ID } = await getUserSheetIds(context);
+    if (!data.nome.trim()) throw new Error("Nome obrigatório");
+    if (!data.sheetName) throw new Error("Mês de destino obrigatório");
+    const row = [
+      data.data_pagamento, data.nome, data.cpf, data.cep, data.email,
+      data.descricao, data.valor_consulta, data.valor_pagamento, data.observacao,
+      "", "",
+    ];
+    await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [row]);
+    return { success: true };
+  });
