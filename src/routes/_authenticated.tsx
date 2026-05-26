@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,19 +16,51 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthLayout() {
   const qc = useQueryClient();
   const nav = useNavigate();
+  const [authReady, setAuthReady] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
   const meFn = useServerFn(getMe);
-  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), enabled: typeof window !== "undefined", retry: false });
+  const me = useQuery({
+    queryKey: ["me"],
+    queryFn: () => meFn(),
+    enabled: authReady && hasSession,
+    retry: false,
+  });
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      qc.invalidateQueries();
-      if (!session) nav({ to: "/login" });
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setHasSession(!!data.session);
+      setAuthReady(true);
     });
-    return () => subscription.unsubscribe();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setHasSession(!!session);
+      setAuthReady(true);
+
+      if (!session) {
+        qc.cancelQueries();
+        qc.clear();
+        nav({ to: "/login", replace: true });
+        return;
+      }
+
+      qc.invalidateQueries();
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [qc, nav]);
 
   async function logout() {
     await supabase.auth.signOut();
+  }
+
+  if (!authReady || !hasSession) {
+    return null;
   }
 
   return (
