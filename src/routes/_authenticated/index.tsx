@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import {
   listInvoices, processInvoice, confirmSend, listSheetTabs,
-  parsePatientText, savePatient, createMonthTab,
+  parsePatientText, savePatient, createMonthTab, listSentInvoices,
 } from "@/lib/notas.functions";
 import { getMe, updateSettings } from "@/lib/auth.functions";
 
@@ -44,6 +44,7 @@ function Index() {
   const createTab = useServerFn(createMonthTab);
   const parseTxt = useServerFn(parsePatientText);
   const savePat = useServerFn(savePatient);
+  const sentFn = useServerFn(listSentInvoices);
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const configs: MonthConfig[] = me.data?.settings.month_folders ?? [];
@@ -92,8 +93,15 @@ function Index() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [editEmail, setEditEmail] = useState({ to: "", subject: "", body: "" });
   const [editRow, setEditRow] = useState<string[]>([]);
-  const [sent, setSent] = useState<Set<string>>(new Set());
   const [hideSent, setHideSent] = useState(false);
+
+  const sentQ = useQuery({
+    queryKey: ["sent-invoices"],
+    queryFn: () => sentFn(),
+    enabled: me.isSuccess && !needsSettings,
+    retry: false,
+  });
+  const sent = useMemo(() => new Set(sentQ.data?.fileIds ?? []), [sentQ.data]);
 
   const procMut = useMutation({
     mutationFn: async (inv: Invoice) => process({ data: { fileId: inv.id, fileName: inv.name } }),
@@ -112,9 +120,9 @@ function Index() {
       });
     },
     onSuccess: () => {
-      if (active) setSent((s) => new Set(s).add(active.id));
       setActive2(null); setPreview(null);
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["sent-invoices"] });
     },
   });
 

@@ -426,6 +426,15 @@ export const confirmSend = createServerFn({ method: "POST" })
     const nome = data.sheetRow[1] ?? "";
     const competencia = data.sheetRow[0] ?? "";
     const found = await findRowInMonth(NOTAS_ID, data.sheetName, nome, competencia);
+
+    // Persiste estado de "enviada" no banco (idempotente)
+    await context.supabase
+      .from("sent_invoices")
+      .upsert(
+        { user_id: context.userId, file_id: data.fileId, file_name: data.fileName, sheet_name: data.sheetName },
+        { onConflict: "user_id,file_id" },
+      );
+
     if (found) {
       const jVal = (found.currentRow[9] ?? "").trim() || "X";
       await sheetUpdate(NOTAS_ID, `${data.sheetName}!J${found.rowNumber}:K${found.rowNumber}`, [[jVal, "X"]]);
@@ -434,6 +443,17 @@ export const confirmSend = createServerFn({ method: "POST" })
     const finalRow = [...data.sheetRow.slice(0, 9), "X", "X"];
     await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [finalRow]);
     return { success: true, updated: false };
+  });
+
+export const listSentInvoices = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("sent_invoices")
+      .select("file_id")
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { fileIds: (data ?? []).map((r: { file_id: string }) => r.file_id) };
   });
 
 export const parsePatientText = createServerFn({ method: "POST" })

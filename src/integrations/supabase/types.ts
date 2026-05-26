@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      sent_invoices: {
+        Row: {
+          file_id: string
+          file_name: string | null
+          id: string
+          sent_at: string
+          sheet_name: string | null
+          user_id: string
+        }
+        Insert: {
+          file_id: string
+          file_name?: string | null
+          id?: string
+          sent_at?: string
+          sheet_name?: string | null
+          user_id: string
+        }
+        Update: {
+          file_id?: string
+          file_name?: string | null
+          id?: string
+          sent_at?: string
+          sheet_name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

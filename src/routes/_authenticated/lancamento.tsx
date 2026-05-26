@@ -198,7 +198,6 @@ function LancamentoPage() {
       for (const s of items) {
         try {
           const m: any = s.match;
-          if (m.source === "none") { status[s.messageId] = "skip"; errs[s.messageId] = "Sem correspondência"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
 
           let paciente: any = null;
           let pagante: any = null;
@@ -210,7 +209,6 @@ function LancamentoPage() {
             const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
             if (benRow) paciente = benRow;
           }
-          if (!paciente) { status[s.messageId] = "skip"; errs[s.messageId] = "Beneficiário não localizado"; setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue; }
 
           const dataP = s.date || todayBR();
           const mesDest = monthFromBR(dataP);
@@ -220,8 +218,20 @@ function LancamentoPage() {
             await qc.invalidateQueries({ queryKey: ["tabs"] });
           }
           const v = (s.valor ?? "").replace(/[^\d,.]/g, "");
-          const target = pagante ?? paciente;
-          const obsFinal = pagante ? `Beneficiário: ${paciente.nome}` : "";
+
+          // Fallback: garante que sempre haja dados para gravar.
+          // - source "pagante" sem benRow → grava em nome do pagante.
+          // - source "none" → grava em nome do pagador do email.
+          const target = paciente ?? pagante ?? {
+            nome: s.pagador, cpf: "", cep: "", email: "",
+            descricao: "Consulta Psiquiatria", valor_consulta: "",
+          };
+          if (!target.nome?.trim()) {
+            status[s.messageId] = "skip"; errs[s.messageId] = "Sem nome no pagamento";
+            setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue;
+          }
+          const obsFinal = paciente && pagante ? `Beneficiário: ${paciente.nome}` :
+                           m.source === "none" ? "Sem correspondência no Cadastro" : "";
 
           await lancarFn({
             data: {
@@ -231,8 +241,8 @@ function LancamentoPage() {
               cpf: target.cpf ?? "",
               cep: target.cep ?? "",
               email: target.email ?? "",
-              descricao: paciente.descricao || "Consulta Psiquiatria",
-              valor_consulta: paciente.valor_consulta ?? "",
+              descricao: (paciente?.descricao) || target.descricao || "Consulta Psiquiatria",
+              valor_consulta: (paciente?.valor_consulta) ?? target.valor_consulta ?? "",
               valor_pagamento: v ? `R$ ${v}` : "",
               observacao: obsFinal,
             },
