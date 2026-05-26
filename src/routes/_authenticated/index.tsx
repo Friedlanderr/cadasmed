@@ -205,7 +205,7 @@ function Index() {
         )}
 
         <div className="grid gap-3">
-          {data?.files.map((f) => {
+          {data?.files.filter((f) => !hideSent || !sent.has(f.id)).map((f) => {
             const isSent = sent.has(f.id);
             return (
               <div key={f.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
