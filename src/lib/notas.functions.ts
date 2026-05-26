@@ -527,11 +527,22 @@ export const lancarPagamento = createServerFn({ method: "POST" })
     nome: string; cpf: string; cep: string; email: string;
     descricao: string; valor_consulta: string; valor_pagamento: string;
     observacao: string;
-  }) => d)
+  }) => {
+    if (!d || typeof d !== "object") throw new Error("Payload inválido");
+    if (!MONTHS_PT.includes(d.sheetName)) throw new Error("Mês de destino inválido");
+    const fields: Array<keyof typeof d> = [
+      "data_pagamento","nome","cpf","cep","email",
+      "descricao","valor_consulta","valor_pagamento","observacao",
+    ];
+    for (const f of fields) {
+      const v = (d as any)[f];
+      if (typeof v !== "string" || v.length > 500) throw new Error(`Campo ${f} inválido`);
+    }
+    if (!d.nome.trim()) throw new Error("Nome obrigatório");
+    return d;
+  })
   .handler(async ({ context, data }) => {
     const { NOTAS_ID } = await getUserSheetIds(context);
-    if (!data.nome.trim()) throw new Error("Nome obrigatório");
-    if (!data.sheetName) throw new Error("Mês de destino obrigatório");
     const row = [
       data.data_pagamento, data.nome, data.cpf, data.cep, data.email,
       data.descricao, data.valor_consulta, data.valor_pagamento, data.observacao,
