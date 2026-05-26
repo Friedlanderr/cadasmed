@@ -608,7 +608,7 @@ export const scanInterPayments = createServerFn({ method: "POST" })
     return { days, dateFrom: "", dateTo: "" };
   })
   .handler(async ({ context, data }) => {
-    const { CADASTRO_ID, NOTAS_ID, EMAIL_TERM } = await getUserSheetIds(context);
+    const { CADASTRO_ID, NOTAS_ID, EMAIL_TERMS } = await getUserSheetIds(context);
     const { lk, mk } = gw();
     const monthCache = new Map<string, string[][]>();
     async function getMonthRows(month: string): Promise<string[][]> {
@@ -621,15 +621,21 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       } catch { monthCache.set(month, []); return []; }
     }
 
+    function buildSubjectQuery(terms: string[]) {
+      if (terms.length === 1) return `subject:"${terms[0]}"`;
+      return "(" + terms.map((t) => `subject:"${t}"`).join(" OR ") + ")";
+    }
+
     let query = "";
+    const subjectPart = buildSubjectQuery(EMAIL_TERMS);
     if (data.dateFrom && data.dateTo) {
       const fromParts = data.dateFrom.split("/");
       const toParts = data.dateTo.split("/");
       const gmailFrom = `${fromParts[2]}/${fromParts[1]}/${fromParts[0]}`;
       const gmailTo = `${toParts[2]}/${toParts[1]}/${toParts[0]}`;
-      query = encodeURIComponent(`subject:"${EMAIL_TERM}" after:${gmailFrom} before:${gmailTo}`);
+      query = encodeURIComponent(`${subjectPart} after:${gmailFrom} before:${gmailTo}`);
     } else {
-      query = encodeURIComponent(`subject:"${EMAIL_TERM}" newer_than:${data.days}d`);
+      query = encodeURIComponent(`${subjectPart} newer_than:${data.days}d`);
     }
     const listRes = await fetch(`${GMAIL}/users/me/messages?maxResults=50&q=${query}`, {
       headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": mk },
