@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import {
   listInvoices, processInvoice, confirmSend, listSheetTabs,
-  parsePatientText, savePatient, createMonthTab,
+  parsePatientText, savePatient, createMonthTab, listSentInvoices,
 } from "@/lib/notas.functions";
 import { getMe, updateSettings } from "@/lib/auth.functions";
 
