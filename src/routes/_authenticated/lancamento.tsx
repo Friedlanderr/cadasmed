@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
-import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab } from "@/lib/notas.functions";
+import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab, scanInterPayments } from "@/lib/notas.functions";
 import { getMe } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/_authenticated/lancamento")({
