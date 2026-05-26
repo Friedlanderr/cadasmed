@@ -18,7 +18,7 @@ function SettingsPage() {
   const qc = useQueryClient();
   const meFn = useServerFn(getMe);
   const save = useServerFn(updateSettings);
-  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
 
   const [cadastro, setCadastro] = useState("");
   const [notas, setNotas] = useState("");
