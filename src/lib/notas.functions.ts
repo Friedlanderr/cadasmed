@@ -82,6 +82,39 @@ async function sheetAppend(spreadsheetId: string, range: string, values: any[][]
   return res.json();
 }
 
+async function sheetUpdate(spreadsheetId: string, range: string, values: any[][]) {
+  const { lk, sk } = gw();
+  const res = await fetch(
+    `${SHEETS}/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk },
+      body: JSON.stringify({ values }),
+    },
+  );
+  if (!res.ok) throw new Error(`Sheets update falhou ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function findRowInMonth(NOTAS_ID: string, sheetName: string, nome: string, competencia: string) {
+  const data = await sheetValues(NOTAS_ID, `${sheetName}!A2:K1000`);
+  const rows = data.values ?? [];
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[1]) continue;
+    const nameScore = nameSimilarity(nome, r[1] ?? "");
+    const dateMatch = (r[0] ?? "").trim() === competencia.trim();
+    const score = nameScore + (dateMatch ? 0.5 : 0);
+    if (score > bestScore && nameScore >= 0.5) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  return bestIdx === -1 ? null : { rowNumber: bestIdx + 2, currentRow: rows[bestIdx] };
+}
+
 async function fetchSheetMeta(NOTAS_ID: string) {
   const { lk, sk } = gw();
   const res = await fetch(
@@ -339,9 +372,18 @@ export const confirmSend = createServerFn({ method: "POST" })
     });
     if (!gRes.ok) throw new Error(`Gmail falhou ${gRes.status}: ${await gRes.text()}`);
 
-    const finalRow = [...data.sheetRow.slice(0, 9), "", "X"];
+    const nome = data.sheetRow[1] ?? "";
+    const competencia = data.sheetRow[0] ?? "";
+    const found = await findRowInMonth(NOTAS_ID, data.sheetName, nome, competencia);
+    if (found) {
+      // mantém NF Emitida atual (ou marca X se vazio) e marca NF Enviada = X
+      const jVal = (found.currentRow[9] ?? "").trim() || "X";
+      await sheetUpdate(NOTAS_ID, `${data.sheetName}!J${found.rowNumber}:K${found.rowNumber}`, [[jVal, "X"]]);
+      return { success: true, updated: true, rowNumber: found.rowNumber };
+    }
+    const finalRow = [...data.sheetRow.slice(0, 9), "X", "X"];
     await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [finalRow]);
-    return { success: true };
+    return { success: true, updated: false };
   });
 
 export const parsePatientText = createServerFn({ method: "POST" })
@@ -379,5 +421,76 @@ export const savePatient = createServerFn({ method: "POST" })
     await sheetAppend(CADASTRO_ID, "Cadastro!A:F", [[
       data.nome, data.cpf, data.cep, data.email, data.descricao, data.valor_consulta,
     ]]);
+    return { success: true };
+  });
+
+export const listCadastro = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    const res = await sheetValues(CADASTRO_ID, "Cadastro!A2:H1000");
+    const rows = (res.values ?? []).filter((r) => r[0]);
+    return {
+      items: rows.map((r) => ({
+        nome: r[0] ?? "", cpf: r[1] ?? "", cep: r[2] ?? "", email: r[3] ?? "",
+        descricao: r[4] ?? "Consulta Psiquiatria",
+        valor_consulta: r[5] ?? "", observacao: r[7] ?? "",
+      })),
+    };
+  });
+
+export const listPagantes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    try {
+      const res = await sheetValues(CADASTRO_ID, "'Dados pagantes não pacientes'!A2:H1000");
+      const rows = (res.values ?? []).filter((r) => r[1]);
+      return {
+        items: rows.map((r) => ({
+          tipo: r[0] ?? "", nome: r[1] ?? "", beneficiario: r[2] ?? "",
+          cpf: r[3] ?? "", cep: r[4] ?? "", email: r[5] ?? "",
+          descricao: r[6] ?? "Consulta Psiquiatria",
+        })),
+      };
+    } catch {
+      return { items: [] };
+    }
+  });
+
+export const savePagante = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    tipo?: string; nome: string; beneficiario: string; cpf: string;
+    cep: string; email: string; descricao: string;
+  }) => d)
+  .handler(async ({ context, data }) => {
+    const { CADASTRO_ID } = await getUserSheetIds(context);
+    if (!data.nome.trim()) throw new Error("Nome do pagante é obrigatório");
+    await sheetAppend(CADASTRO_ID, "'Dados pagantes não pacientes'!A:G", [[
+      data.tipo ?? "Pagante", data.nome, data.beneficiario,
+      data.cpf, data.cep, data.email, data.descricao,
+    ]]);
+    return { success: true };
+  });
+
+export const lancarPagamento = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    data_pagamento: string; sheetName: string;
+    nome: string; cpf: string; cep: string; email: string;
+    descricao: string; valor_consulta: string; valor_pagamento: string;
+    observacao: string;
+  }) => d)
+  .handler(async ({ context, data }) => {
+    const { NOTAS_ID } = await getUserSheetIds(context);
+    if (!data.nome.trim()) throw new Error("Nome obrigatório");
+    if (!data.sheetName) throw new Error("Mês de destino obrigatório");
+    const row = [
+      data.data_pagamento, data.nome, data.cpf, data.cep, data.email,
+      data.descricao, data.valor_consulta, data.valor_pagamento, data.observacao,
+      "", "",
+    ];
+    await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [row]);
     return { success: true };
   });

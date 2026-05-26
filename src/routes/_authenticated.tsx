@@ -78,6 +78,8 @@ function AuthLayout() {
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-6xl px-6 py-3 flex items-center gap-4 text-sm">
           <Link to="/" className="font-medium hover:underline">Notas</Link>
+          <Link to="/lancamento" className="hover:underline">Lançar pagamento</Link>
+          <Link to="/pagantes" className="hover:underline">Pagantes</Link>
           <Link to="/settings" className="hover:underline">Configurações</Link>
           {me.data?.isAdmin && <Link to="/admin" className="hover:underline">Admin</Link>}
           <span className="ml-auto text-muted-foreground">

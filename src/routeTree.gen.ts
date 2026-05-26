@@ -13,6 +13,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedPagantesRouteImport } from './routes/_authenticated/pagantes'
+import { Route as AuthenticatedLancamentoRouteImport } from './routes/_authenticated/lancamento'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
 const LoginRoute = LoginRouteImport.update({
@@ -34,6 +36,16 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedPagantesRoute = AuthenticatedPagantesRouteImport.update({
+  id: '/pagantes',
+  path: '/pagantes',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedLancamentoRoute = AuthenticatedLancamentoRouteImport.update({
+  id: '/lancamento',
+  path: '/lancamento',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -44,11 +56,15 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/lancamento': typeof AuthenticatedLancamentoRoute
+  '/pagantes': typeof AuthenticatedPagantesRoute
   '/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/lancamento': typeof AuthenticatedLancamentoRoute
+  '/pagantes': typeof AuthenticatedPagantesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -57,19 +73,29 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/lancamento': typeof AuthenticatedLancamentoRoute
+  '/_authenticated/pagantes': typeof AuthenticatedPagantesRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/admin' | '/settings'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/lancamento'
+    | '/pagantes'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/admin' | '/settings' | '/'
+  to: '/login' | '/admin' | '/lancamento' | '/pagantes' | '/settings' | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/admin'
+    | '/_authenticated/lancamento'
+    | '/_authenticated/pagantes'
     | '/_authenticated/settings'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -109,6 +135,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/pagantes': {
+      id: '/_authenticated/pagantes'
+      path: '/pagantes'
+      fullPath: '/pagantes'
+      preLoaderRoute: typeof AuthenticatedPagantesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/lancamento': {
+      id: '/_authenticated/lancamento'
+      path: '/lancamento'
+      fullPath: '/lancamento'
+      preLoaderRoute: typeof AuthenticatedLancamentoRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -121,12 +161,16 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedLancamentoRoute: typeof AuthenticatedLancamentoRoute
+  AuthenticatedPagantesRoute: typeof AuthenticatedPagantesRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedLancamentoRoute: AuthenticatedLancamentoRoute,
+  AuthenticatedPagantesRoute: AuthenticatedPagantesRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
