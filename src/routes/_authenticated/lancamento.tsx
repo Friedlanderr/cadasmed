@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab, scanInterPayments } from "@/lib/notas.functions";
 import { getMe } from "@/lib/auth.functions";
 
@@ -49,6 +49,7 @@ function LancamentoPage() {
   const [dataPag, setDataPag] = useState(todayBR());
   const [pacienteQ, setPacienteQ] = useState("");
   const [pacienteOpen, setPacienteOpen] = useState(false);
+  const pacienteRef = useRef<HTMLDivElement>(null);
   const [pacienteSel, setPacienteSel] = useState<any | null>(null);
   const [pagQ, setPagQ] = useState("");
   const [pagSel, setPagSel] = useState<any | null>(null);
@@ -61,6 +62,16 @@ function LancamentoPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<Record<string, "pending" | "ok" | "skip" | "err">>({});
   const [bulkErr, setBulkErr] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pacienteRef.current && !pacienteRef.current.contains(event.target as Node)) {
+        setPacienteOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const m = monthFromBR(dataPag);
@@ -372,7 +383,7 @@ function LancamentoPage() {
           </label>
         </div>
 
-        <div>
+        <div ref={pacienteRef}>
           <span className="text-sm font-medium">Paciente</span>
           {pacienteSel ? (
             <div className="mt-1 flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
