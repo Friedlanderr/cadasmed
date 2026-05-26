@@ -266,19 +266,39 @@ function LancamentoPage() {
       </p>
 
       <div className="mt-6 rounded-xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <div>
             <p className="text-sm font-medium">Varrer emails do Banco Inter</p>
             <p className="text-xs text-muted-foreground">Busca "Pagamento Pix recebido" no Gmail e tenta casar com o Cadastro.</p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Últimos
-              <input type="number" min={1} max={180} value={scanDays}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setScanDays(parseInt(e.target.value || "15", 10))}
-                className="mx-2 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm" />
-              dias
-            </label>
+          <div className="ml-auto flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2 text-xs">
+              <button onClick={() => setScanMode("days")}
+                className={`rounded-md px-2 py-1 ${scanMode === "days" ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50"}`}>
+                Últimos dias
+              </button>
+              <button onClick={() => setScanMode("range")}
+                className={`rounded-md px-2 py-1 ${scanMode === "range" ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50"}`}>
+                Busca avançada
+              </button>
+            </div>
+            {scanMode === "days" ? (
+              <label className="text-xs text-muted-foreground">Últimos
+                <input type="number" min={1} max={180} value={scanDays}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setScanDays(parseInt(e.target.value || "15", 10))}
+                  className="mx-2 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                dias
+              </label>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="DD/MM/AAAA"
+                  className="w-28 rounded-md border border-input bg-background px-2 py-1 text-sm" />
+                <span className="text-xs text-muted-foreground">até</span>
+                <input value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="DD/MM/AAAA"
+                  className="w-28 rounded-md border border-input bg-background px-2 py-1 text-sm" />
+              </div>
+            )}
             <button onClick={() => scanMut.mutate()} disabled={scanMut.isPending}
               className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
               {scanMut.isPending ? "Buscando…" : "Buscar Pix recebidos"}
