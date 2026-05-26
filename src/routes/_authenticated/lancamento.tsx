@@ -56,7 +56,7 @@ function LancamentoPage() {
   const [emitirEm, setEmitirEm] = useState<"paciente" | "pagante">("paciente");
   const [mes, setMes] = useState("");
   const [okMsg, setOkMsg] = useState("");
-  const [scanDays, setScanDays] = useState(30);
+  const [scanDays, setScanDays] = useState(15);
 
   useEffect(() => {
     const m = monthFromBR(dataPag);
@@ -179,7 +179,8 @@ function LancamentoPage() {
           <div className="ml-auto flex items-center gap-2">
             <label className="text-xs text-muted-foreground">Últimos
               <input type="number" min={1} max={180} value={scanDays}
-                onChange={(e) => setScanDays(parseInt(e.target.value || "30", 10))}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setScanDays(parseInt(e.target.value || "15", 10))}
                 className="mx-2 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm" />
               dias
             </label>
