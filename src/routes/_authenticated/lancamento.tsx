@@ -73,6 +73,11 @@ function LancamentoPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const m = monthFromBR(dataPag);
+    if (m && !mes) setMes(m);
+  }, [dataPag, mes]);
+
   const pacientesFiltered = useMemo(() => {
     if (!cad.data?.items) return [];
     const q = pacienteQ.toLowerCase().trim();
