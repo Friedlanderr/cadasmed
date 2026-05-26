@@ -143,11 +143,11 @@ export const createMonthTab = createServerFn({ method: "POST" })
     });
     if (!addRes.ok) throw new Error(`Criar aba falhou ${addRes.status}: ${await addRes.text()}`);
 
-    // 2) copia o cabeçalho da aba-fonte (linha 1, A:K)
+    // 2) copia o cabeçalho da aba-fonte (linhas 1 e 2, A:K)
     if (source) {
-      const header = await sheetValues(NOTAS_ID, `${source}!A1:K1`);
-      const headerRow = header.values?.[0] ?? [];
-      if (headerRow.length > 0) {
+      const header = await sheetValues(NOTAS_ID, `${source}!A1:K2`);
+      const headerRows = header.values ?? [];
+      if (headerRows.length > 0) {
         const putRes = await fetch(
           `${SHEETS}/spreadsheets/${NOTAS_ID}/values/${data.month}!A1?valueInputOption=USER_ENTERED`,
           {
@@ -157,7 +157,7 @@ export const createMonthTab = createServerFn({ method: "POST" })
               Authorization: `Bearer ${lk}`,
               "X-Connection-Api-Key": sk,
             },
-            body: JSON.stringify({ values: [headerRow] }),
+            body: JSON.stringify({ values: headerRows }),
           },
         );
         if (!putRes.ok) throw new Error(`Cabeçalho falhou ${putRes.status}: ${await putRes.text()}`);
