@@ -85,6 +85,18 @@ function Index() {
 
   const tabsQ = useQuery({ queryKey: ["tabs"], queryFn: () => tabs(), enabled: showSettings });
 
+  const [newMonth, setNewMonth] = useState<string>("");
+  const createTabMut = useMutation({
+    mutationFn: async (month: string) => createTab({ data: { month } }),
+    onSuccess: (_res, month) => {
+      if (!configs.find((c) => c.month === month)) {
+        persist([...configs, { month, folderId: "" }]);
+      }
+      setNewMonth("");
+      qc.invalidateQueries({ queryKey: ["tabs"] });
+    },
+  });
+
   const [active, setActive2] = useState<Invoice | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [editEmail, setEditEmail] = useState({ to: "", subject: "", body: "" });
