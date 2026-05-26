@@ -119,6 +119,40 @@ function LancamentoPage() {
     },
   });
 
+  const scanMut = useMutation({
+    mutationFn: async () => scanFn({ data: { days: scanDays } }),
+  });
+
+  function applySuggestion(s: any) {
+    const m = s.match;
+    if (m.source === "cadastro") {
+      setPacienteSel({
+        nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email,
+        descricao: m.descricao, valor_consulta: m.valor_consulta,
+      });
+      setPacienteQ(m.nome);
+      setPagSel(null); setPagQ(""); setEmitirEm("paciente");
+    } else if (m.source === "pagante") {
+      setPagSel({ nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email });
+      setPagQ(m.nome);
+      // try auto-match beneficiary in Cadastro
+      const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
+      const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+      if (benRow) { setPacienteSel(benRow); setPacienteQ(benRow.nome); }
+      setEmitirEm("paciente");
+    } else {
+      setPagSel({ nome: m.nome, cpf: "", cep: "", email: "" });
+      setPagQ(m.nome);
+    }
+    const v = (s.valor ?? "").replace(/[^\d,.]/g, "");
+    if (v) setValorPag(`R$ ${v}`);
+    if (s.date) setDataPag(s.date);
+    setOkMsg("Sugestão aplicada — confira os campos");
+    setTimeout(() => setOkMsg(""), 3000);
+  }
+
+
+
   if (needsSettings) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
