@@ -69,6 +69,12 @@ function Index() {
   function persist(next: MonthConfig[]) {
     setConfigs(next);
     localStorage.setItem(LS_KEY, JSON.stringify(next));
+    if (activeMonth && !next.find((c) => c.month === activeMonth)) {
+      const fallback = next[0]?.month ?? "";
+      setActiveMonth(fallback);
+      if (fallback) localStorage.setItem(LS_ACTIVE, fallback);
+      else localStorage.removeItem(LS_ACTIVE);
+    }
   }
   function setActive(m: string) {
     setActiveMonth(m);
