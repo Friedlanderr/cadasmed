@@ -268,8 +268,8 @@ function LancamentoPage() {
       <div className="mt-6 rounded-xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-start gap-3">
           <div>
-            <p className="text-sm font-medium">Varrer emails do Banco Inter</p>
-            <p className="text-xs text-muted-foreground">Busca "Pagamento Pix recebido" no Gmail e tenta casar com o Cadastro.</p>
+            <p className="text-sm font-medium">Varredura emails de pagamento</p>
+            <p className="text-xs text-muted-foreground">Busca pagamentos no Gmail e tenta casar com o Cadastro.</p>
           </div>
           <div className="ml-auto flex flex-col items-end gap-2">
             <div className="flex items-center gap-2 text-xs">

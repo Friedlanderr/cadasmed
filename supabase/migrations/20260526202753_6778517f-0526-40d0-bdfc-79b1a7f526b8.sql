@@ -1,0 +1,1 @@
+ALTER TABLE public.user_settings ADD COLUMN IF NOT EXISTS email_search_term TEXT DEFAULT 'Pagamento Pix recebido'; GRANT SELECT, UPDATE ON public.user_settings TO authenticated; GRANT ALL ON public.user_settings TO service_role;

@@ -23,6 +23,7 @@ function SettingsPage() {
 
   const [cadastro, setCadastro] = useState("");
   const [notas, setNotas] = useState("");
+  const [emailTerm, setEmailTerm] = useState("");
   const [saved, setSaved] = useState(false);
 
   const [pw, setPw] = useState("");
@@ -48,11 +49,12 @@ function SettingsPage() {
     if (me.data) {
       setCadastro(me.data.settings.cadastro_sheet_id);
       setNotas(me.data.settings.notas_sheet_id);
+      setEmailTerm(me.data.settings.email_search_term);
     }
   }, [me.data]);
 
   const saveMut = useMutation({
-    mutationFn: async () => save({ data: { cadastro_sheet_id: extractSheetId(cadastro), notas_sheet_id: extractSheetId(notas) } }),
+    mutationFn: async () => save({ data: { cadastro_sheet_id: extractSheetId(cadastro), notas_sheet_id: extractSheetId(notas), email_search_term: emailTerm } }),
     onSuccess: () => {
       setSaved(true);
       qc.invalidateQueries({ queryKey: ["me"] });
@@ -82,6 +84,14 @@ function SettingsPage() {
           <input value={notas} onChange={(e) => setNotas(e.target.value)}
             placeholder="Link ou ID da planilha"
             className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono" />
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-medium">Termo de busca nos emails</span>
+          <p className="text-xs text-muted-foreground mt-0.5">Assunto usado para encontrar emails de pagamento no Gmail. Padrão: "Pagamento Pix recebido".</p>
+          <input value={emailTerm} onChange={(e) => setEmailTerm(e.target.value)}
+            placeholder="Ex: Pagamento Pix recebido"
+            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
         </label>
 
         <div className="flex items-center gap-3 pt-2">
