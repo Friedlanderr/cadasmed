@@ -22,9 +22,9 @@ function AdminPage() {
   const delFn = useServerFn(adminDeleteUser);
   const toggleFn = useServerFn(adminToggleAdmin);
 
-  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const isAdmin = !!me.data?.isAdmin;
-  const users = useQuery({ queryKey: ["admin-users"], queryFn: () => listFn(), enabled: isAdmin });
+  const users = useQuery({ queryKey: ["admin-users"], queryFn: () => listFn(), enabled: me.isSuccess && isAdmin, retry: false });
 
   const [form, setForm] = useState({ email: "", password: "", displayName: "", isAdmin: false });
 
