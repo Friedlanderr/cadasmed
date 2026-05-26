@@ -34,6 +34,7 @@ export const updateSettings = createServerFn({ method: "POST" })
     cadastro_sheet_id?: string;
     notas_sheet_id?: string;
     month_folders?: MonthFolder[];
+    email_search_term?: string;
   }) => d)
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
@@ -41,10 +42,12 @@ export const updateSettings = createServerFn({ method: "POST" })
       cadastro_sheet_id?: string;
       notas_sheet_id?: string;
       month_folders?: MonthFolder[];
+      email_search_term?: string;
     } = {};
     if (typeof data.cadastro_sheet_id === "string") patch.cadastro_sheet_id = data.cadastro_sheet_id.trim();
     if (typeof data.notas_sheet_id === "string") patch.notas_sheet_id = data.notas_sheet_id.trim();
     if (Array.isArray(data.month_folders)) patch.month_folders = data.month_folders;
+    if (typeof data.email_search_term === "string") patch.email_search_term = data.email_search_term.trim();
     const { error } = await supabase.from("user_settings").update(patch).eq("user_id", userId);
     if (error) throw new Error(error.message);
     return { success: true };
