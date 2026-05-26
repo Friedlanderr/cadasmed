@@ -651,7 +651,8 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       }
 
       // Detect if already lançado on destination month sheet
-      const destMonth = monthFromBR(date);
+      const mIdx = parseInt((date.split("/")[1] ?? ""), 10) - 1;
+      const destMonth = mIdx >= 0 && mIdx < 12 ? MONTHS_PT[mIdx] : "";
       const checkName = match.source === "pagante" ? (match.nome) : match.nome;
       let alreadyInSheet = false;
       if (destMonth && checkName) {
