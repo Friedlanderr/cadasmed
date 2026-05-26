@@ -17,7 +17,7 @@ function AuthLayout() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const meFn = useServerFn(getMe);
-  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), enabled: typeof window !== "undefined", retry: false });
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
