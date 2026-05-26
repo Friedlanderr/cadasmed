@@ -106,7 +106,7 @@ function Index() {
       return confirm({
         data: {
           sheetRow: editRow, sheetName: activeMonth, email: editEmail,
-          pdfBase64: preview.pdfBase64, fileName: preview.fileName,
+          fileId: active!.id, fileName: preview.fileName,
         },
       });
     },
