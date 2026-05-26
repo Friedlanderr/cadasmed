@@ -79,19 +79,93 @@ async function sheetAppend(spreadsheetId: string, range: string, values: any[][]
   return res.json();
 }
 
-export const listSheetTabs = createServerFn({ method: "GET" }).handler(async () => {
+async function fetchSheetMeta() {
   const { lk, sk } = gw();
   const res = await fetch(
-    `${SHEETS}/spreadsheets/${NOTAS_ID}?fields=sheets(properties(title,index))`,
+    `${SHEETS}/spreadsheets/${NOTAS_ID}?fields=sheets(properties(sheetId,title,index))`,
     { headers: { Authorization: `Bearer ${lk}`, "X-Connection-Api-Key": sk } },
   );
   if (!res.ok) throw new Error(`Sheets meta falhou ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as { sheets: Array<{ properties: { title: string; index: number } }> };
+  return (await res.json()) as {
+    sheets: Array<{ properties: { sheetId: number; title: string; index: number } }>;
+  };
+}
+
+export const listSheetTabs = createServerFn({ method: "GET" }).handler(async () => {
+  const data = await fetchSheetMeta();
   const tabs = (data.sheets ?? [])
     .map((s) => s.properties.title)
     .filter((t) => MONTHS_PT.includes(t));
   return { tabs };
 });
+
+export const createMonthTab = createServerFn({ method: "POST" })
+  .inputValidator((d: { month: string } | undefined) => {
+    if (!d?.month || !MONTHS_PT.includes(d.month)) throw new Error("Mês inválido");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const { lk, sk } = gw();
+    const meta = await fetchSheetMeta();
+    const existing = meta.sheets.map((s) => s.properties.title);
+    if (existing.includes(data.month)) {
+      return { success: true, alreadyExisted: true };
+    }
+
+    // Escolhe a aba-fonte: mês anterior na ordem do calendário, ou a aba de mês mais recente existente.
+    const targetIdx = MONTHS_PT.indexOf(data.month);
+    const monthTabs = meta.sheets
+      .map((s) => s.properties.title)
+      .filter((t) => MONTHS_PT.includes(t));
+    let source: string | null = null;
+    for (let i = targetIdx - 1; i >= 0; i--) {
+      if (monthTabs.includes(MONTHS_PT[i])) { source = MONTHS_PT[i]; break; }
+    }
+    if (!source) {
+      // pega o mês mais "próximo anterior" entre as abas existentes
+      const sorted = monthTabs
+        .map((t) => ({ t, i: MONTHS_PT.indexOf(t) }))
+        .sort((a, b) => b.i - a.i);
+      source = sorted[0]?.t ?? null;
+    }
+
+    // 1) cria a nova aba
+    const addRes = await fetch(`${SHEETS}/spreadsheets/${NOTAS_ID}:batchUpdate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${lk}`,
+        "X-Connection-Api-Key": sk,
+      },
+      body: JSON.stringify({
+        requests: [{ addSheet: { properties: { title: data.month } } }],
+      }),
+    });
+    if (!addRes.ok) throw new Error(`Criar aba falhou ${addRes.status}: ${await addRes.text()}`);
+
+    // 2) copia o cabeçalho da aba-fonte (linha 1, A:K)
+    if (source) {
+      const header = await sheetValues(NOTAS_ID, `${source}!A1:K1`);
+      const headerRow = header.values?.[0] ?? [];
+      if (headerRow.length > 0) {
+        const putRes = await fetch(
+          `${SHEETS}/spreadsheets/${NOTAS_ID}/values/${data.month}!A1?valueInputOption=USER_ENTERED`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${lk}`,
+              "X-Connection-Api-Key": sk,
+            },
+            body: JSON.stringify({ values: [headerRow] }),
+          },
+        );
+        if (!putRes.ok) throw new Error(`Cabeçalho falhou ${putRes.status}: ${await putRes.text()}`);
+      }
+    }
+
+    return { success: true, alreadyExisted: false, copiedFrom: source };
+  });
 
 export const listInvoices = createServerFn({ method: "POST" })
   .inputValidator((d: { folderId: string } | undefined) => {
