@@ -49,6 +49,7 @@ function LancamentoPage() {
   const [dataPag, setDataPag] = useState(todayBR());
   const [pacienteQ, setPacienteQ] = useState("");
   const [pacienteOpen, setPacienteOpen] = useState(false);
+  const pacienteRef = useRef<HTMLDivElement>(null);
   const [pacienteSel, setPacienteSel] = useState<any | null>(null);
   const [pagQ, setPagQ] = useState("");
   const [pagSel, setPagSel] = useState<any | null>(null);
@@ -63,9 +64,14 @@ function LancamentoPage() {
   const [bulkErr, setBulkErr] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const m = monthFromBR(dataPag);
-    if (m && !mes) setMes(m);
-  }, [dataPag, mes]);
+    function handleClickOutside(event: MouseEvent) {
+      if (pacienteRef.current && !pacienteRef.current.contains(event.target as Node)) {
+        setPacienteOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const pacientesFiltered = useMemo(() => {
     if (!cad.data?.items) return [];
