@@ -27,6 +27,16 @@ function AuthLayout() {
   });
 
   useEffect(() => {
+    if (!me.error) return;
+    if (!(me.error instanceof Error)) return;
+    if (!me.error.message.includes("Unauthorized")) return;
+
+    qc.cancelQueries();
+    qc.clear();
+    nav({ to: "/login", replace: true });
+  }, [me.error, qc, nav]);
+
+  useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
