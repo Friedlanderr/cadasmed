@@ -56,7 +56,7 @@ function LancamentoPage() {
   const [emitirEm, setEmitirEm] = useState<"paciente" | "pagante">("paciente");
   const [mes, setMes] = useState("");
   const [okMsg, setOkMsg] = useState("");
-  const [scanDays, setScanDays] = useState(30);
+  const [scanDays, setScanDays] = useState(15);
 
   useEffect(() => {
     const m = monthFromBR(dataPag);
