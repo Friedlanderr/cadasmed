@@ -388,7 +388,7 @@ function Index() {
 
       {/* ===== Review modal ===== */}
       {active && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4" onClick={() => !sendMut.isPending && setActive2(null)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/40 p-4">
           <div className="my-8 w-full max-w-4xl rounded-2xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-border p-6">
               <div className="flex items-start justify-between gap-4">
