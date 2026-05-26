@@ -178,12 +178,18 @@ function Index() {
           </div>
         </div>
 
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-2">
           <h2 className="text-2xl font-semibold">Notas em {activeMonth || "—"}</h2>
-          <button onClick={() => refetch()} disabled={isFetching || !activeCfg}
-            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
-            {isFetching ? "Atualizando…" : "Atualizar"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setHideSent((v) => !v)}
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted">
+              {hideSent ? "Mostrar enviadas" : "Ocultar enviadas"}
+            </button>
+            <button onClick={() => refetch()} disabled={isFetching || !activeCfg}
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
+              {isFetching ? "Atualizando…" : "Atualizar"}
+            </button>
+          </div>
         </div>
 
         {!activeCfg && !needsSettings && (
