@@ -25,6 +25,25 @@ function SettingsPage() {
   const [notas, setNotas] = useState("");
   const [saved, setSaved] = useState(false);
 
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwMsg, setPwMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const pwMut = useMutation({
+    mutationFn: async () => {
+      if (pw.length < 8) throw new Error("A senha precisa ter ao menos 8 caracteres");
+      if (pw !== pw2) throw new Error("As senhas não coincidem");
+      const { error } = await supabase.auth.updateUser({ password: pw });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      setPw(""); setPw2("");
+      setPwMsg({ type: "ok", text: "Senha alterada com sucesso ✓" });
+      setTimeout(() => setPwMsg(null), 3000);
+    },
+    onError: (e: Error) => setPwMsg({ type: "err", text: e.message }),
+  });
+
   useEffect(() => {
     if (me.data) {
       setCadastro(me.data.settings.cadastro_sheet_id);
