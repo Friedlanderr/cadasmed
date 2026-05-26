@@ -48,6 +48,7 @@ function LancamentoPage() {
 
   const [dataPag, setDataPag] = useState(todayBR());
   const [pacienteQ, setPacienteQ] = useState("");
+  const [pacienteOpen, setPacienteOpen] = useState(false);
   const [pacienteSel, setPacienteSel] = useState<any | null>(null);
   const [pagQ, setPagQ] = useState("");
   const [pagSel, setPagSel] = useState<any | null>(null);
