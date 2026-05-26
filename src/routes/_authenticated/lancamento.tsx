@@ -271,22 +271,62 @@ function LancamentoPage() {
             {scanMut.data.items.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhum email encontrado no período.</p>
             )}
-            {scanMut.data.items.map((s) => (
-              <div key={s.messageId} className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{s.pagador} <span className="text-muted-foreground font-normal">· {s.valor || "—"} · {s.date}</span></p>
-                  <p className="text-xs text-muted-foreground">
-                    {s.match.source === "cadastro" && <>✓ Casou com paciente <strong>{s.match.nome}</strong></>}
-                    {s.match.source === "pagante" && <>✓ Casou com pagante <strong>{s.match.nome}</strong>{s.match.beneficiarioSugerido ? ` → benef. ${s.match.beneficiarioSugerido}` : ""}</>}
-                    {s.match.source === "none" && <span className="text-amber-700">Não encontrado no Cadastro</span>}
-                  </p>
+            {scanMut.data.items.length > 0 && (
+              <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2 text-xs">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox"
+                    checked={selectedIds.size === scanMut.data.items.length && selectedIds.size > 0}
+                    onChange={toggleAll} />
+                  <span>Selecionar todos ({selectedIds.size}/{scanMut.data.items.length})</span>
+                </label>
+                <div className="flex gap-2">
+                  {selectedIds.size === 1 && (() => {
+                    const one = scanMut.data.items.find((i) => selectedIds.has(i.messageId));
+                    return one ? (
+                      <button onClick={() => applySuggestion(one)}
+                        className="rounded-md border border-border px-3 py-1 hover:bg-muted">
+                        Editar selecionado no formulário
+                      </button>
+                    ) : null;
+                  })()}
+                  {selectedIds.size >= 1 && (
+                    <button onClick={() => bulkMut.mutate()} disabled={bulkMut.isPending}
+                      className="rounded-md bg-primary px-3 py-1 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                      {bulkMut.isPending ? "Lançando…" : `Lançar ${selectedIds.size} selecionado${selectedIds.size > 1 ? "s" : ""}`}
+                    </button>
+                  )}
                 </div>
-                <button onClick={() => applySuggestion(s)}
-                  className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted">
-                  Usar
-                </button>
               </div>
-            ))}
+            )}
+            {scanMut.data.items.map((s) => {
+              const st = bulkStatus[s.messageId];
+              const checked = selectedIds.has(s.messageId);
+              return (
+                <div key={s.messageId} className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${checked ? "border-primary bg-primary/5" : "border-border bg-background"}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleSelected(s.messageId)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{s.pagador} <span className="text-muted-foreground font-normal">· {s.valor || "—"} · {s.date}</span></p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.match.source === "cadastro" && <>✓ Casou com paciente <strong>{s.match.nome}</strong></>}
+                      {s.match.source === "pagante" && <>✓ Casou com pagante <strong>{s.match.nome}</strong>{s.match.beneficiarioSugerido ? ` → benef. ${s.match.beneficiarioSugerido}` : ""}</>}
+                      {s.match.source === "none" && <span className="text-amber-700">Não encontrado no Cadastro</span>}
+                    </p>
+                    {st && (
+                      <p className="text-xs mt-1">
+                        {st === "pending" && <span className="text-muted-foreground">Lançando…</span>}
+                        {st === "ok" && <span className="text-success">✓ Lançado</span>}
+                        {st === "skip" && <span className="text-amber-700">Ignorado: {bulkErr[s.messageId]}</span>}
+                        {st === "err" && <span className="text-destructive">Erro: {bulkErr[s.messageId]}</span>}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => applySuggestion(s)}
+                    className="rounded-md border border-border px-3 py-1 text-xs hover:bg-muted">
+                    Usar
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
