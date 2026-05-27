@@ -4,11 +4,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getMe } from "@/lib/auth.functions";
+import { clearLocalAuthState, getAuthenticatedUser } from "@/lib/auth-session.client";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/login" });
+    const user = await getAuthenticatedUser();
+    if (!user) throw redirect({ to: "/login" });
   },
   component: AuthLayout,
 });
@@ -31,7 +32,7 @@ function AuthLayout() {
     if (!(me.error instanceof Error)) return;
     if (!me.error.message.includes("Unauthorized")) return;
 
-    void supabase.auth.signOut({ scope: "local" });
+    void clearLocalAuthState();
     qc.cancelQueries();
     qc.clear();
     nav({ to: "/login", replace: true });
@@ -41,10 +42,10 @@ function AuthLayout() {
     let mounted = true;
 
     async function syncAuthState(redirectIfMissing: boolean) {
-      const { data, error } = await supabase.auth.getUser();
+      const user = await getAuthenticatedUser();
       if (!mounted) return;
 
-      const authenticated = !!data.user && !error;
+      const authenticated = !!user;
       setHasSession(authenticated);
       setAuthReady(true);
 
@@ -91,7 +92,7 @@ function AuthLayout() {
   }, [qc, nav]);
 
   async function logout() {
-    await supabase.auth.signOut();
+    await clearLocalAuthState();
   }
 
   if (!authReady || !hasSession) {
