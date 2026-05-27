@@ -88,7 +88,7 @@ async function logAudit(opts: {
     actor_email: actorProfile?.email ?? null,
     target_user_id: opts.targetUserId ?? null,
     action: opts.action,
-    details: opts.details ?? {},
+    details: (opts.details ?? {}) as never,
     severity: opts.severity ?? "info",
   });
 }
