@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { getMe, adminListUsers, adminCreateUser, adminDeleteUser, adminToggleAdmin } from "@/lib/auth.functions";
+import { getMe, adminListUsers, adminCreateUser, adminDeleteUser, adminToggleAdmin, adminResetPassword } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/admin")({
