@@ -4,8 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) throw redirect({ to: "/" });
+    const { data, error } = await supabase.auth.getUser();
+    if (data.user && !error) throw redirect({ to: "/" });
   },
   component: LoginPage,
   head: () => ({ meta: [{ title: "Entrar — Notas Fiscais" }] }),
@@ -21,7 +21,10 @@ function LoginPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(""); setLoading(true);
+
+    await supabase.auth.signOut({ scope: "local" });
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
     setLoading(false);
     // Supabase lança AuthWeakPasswordError quando a senha é considerada fraca (HIBP),
     // mas a sessão É criada. Se temos sessão, prosseguimos.
