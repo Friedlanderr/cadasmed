@@ -121,6 +121,23 @@ function AdminPage() {
                 <span className={`text-xs rounded-full px-2 py-0.5 ${uIsAdmin ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
                   {uIsAdmin ? "admin" : "user"}
                 </span>
+                <input
+                  type="text"
+                  placeholder="Nova senha (mín. 8)"
+                  value={pwEdits[u.userId] ?? ""}
+                  onChange={(e) => setPwEdits((p) => ({ ...p, [u.userId]: e.target.value }))}
+                  className="rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono w-44"
+                />
+                <button
+                  onClick={() => {
+                    const pw = pwEdits[u.userId] ?? "";
+                    if (pw.length < 8) { alert("Senha precisa ter ao menos 8 caracteres"); return; }
+                    if (confirm(`Redefinir senha de ${u.email}?`)) resetMut.mutate({ userId: u.userId, password: pw });
+                  }}
+                  disabled={resetMut.isPending}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50">
+                  Redefinir senha
+                </button>
                 <button onClick={() => toggleMut.mutate({ userId: u.userId, makeAdmin: !uIsAdmin })}
                   disabled={toggleMut.isPending || (isSelf && uIsAdmin)}
                   className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50">
