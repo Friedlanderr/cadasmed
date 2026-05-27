@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { getMe, adminListUsers, adminCreateUser, adminDeleteUser, adminToggleAdmin } from "@/lib/auth.functions";
+import { getMe, adminListUsers, adminCreateUser, adminDeleteUser, adminToggleAdmin, adminResetPassword } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -21,6 +21,8 @@ function AdminPage() {
   const createFn = useServerFn(adminCreateUser);
   const delFn = useServerFn(adminDeleteUser);
   const toggleFn = useServerFn(adminToggleAdmin);
+  const resetFn = useServerFn(adminResetPassword);
+  const [pwEdits, setPwEdits] = useState<Record<string, string>>({});
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const isAdmin = !!me.data?.isAdmin;
@@ -44,6 +46,15 @@ function AdminPage() {
   const toggleMut = useMutation({
     mutationFn: async (vars: { userId: string; makeAdmin: boolean }) => toggleFn({ data: vars }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
+
+  const resetMut = useMutation({
+    mutationFn: async (vars: { userId: string; password: string }) => resetFn({ data: vars }),
+    onSuccess: (_d, vars) => {
+      setPwEdits((p) => ({ ...p, [vars.userId]: "" }));
+      alert("Senha atualizada com sucesso");
+    },
+    onError: (e: Error) => alert(e.message),
   });
 
   if (me.isLoading) return <p className="p-6 text-muted-foreground">Carregando…</p>;
@@ -110,6 +121,23 @@ function AdminPage() {
                 <span className={`text-xs rounded-full px-2 py-0.5 ${uIsAdmin ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
                   {uIsAdmin ? "admin" : "user"}
                 </span>
+                <input
+                  type="text"
+                  placeholder="Nova senha (mín. 8)"
+                  value={pwEdits[u.userId] ?? ""}
+                  onChange={(e) => setPwEdits((p) => ({ ...p, [u.userId]: e.target.value }))}
+                  className="rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono w-44"
+                />
+                <button
+                  onClick={() => {
+                    const pw = pwEdits[u.userId] ?? "";
+                    if (pw.length < 8) { alert("Senha precisa ter ao menos 8 caracteres"); return; }
+                    if (confirm(`Redefinir senha de ${u.email}?`)) resetMut.mutate({ userId: u.userId, password: pw });
+                  }}
+                  disabled={resetMut.isPending}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50">
+                  Redefinir senha
+                </button>
                 <button onClick={() => toggleMut.mutate({ userId: u.userId, makeAdmin: !uIsAdmin })}
                   disabled={toggleMut.isPending || (isSelf && uIsAdmin)}
                   className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50">
