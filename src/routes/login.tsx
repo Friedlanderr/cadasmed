@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { clearLocalAuthState, getAuthenticatedUser, replaceAuthSession } from "@/lib/auth-session.client";
+import { clearLocalAuthState, getAuthenticatedUser, replaceAuthSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {

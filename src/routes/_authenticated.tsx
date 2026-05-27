@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getMe } from "@/lib/auth.functions";
-import { clearLocalAuthState, getAuthenticatedUser } from "@/lib/auth-session.client";
+import { clearLocalAuthState, getAuthenticatedUser } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
