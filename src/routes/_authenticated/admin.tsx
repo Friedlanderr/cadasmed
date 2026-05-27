@@ -21,6 +21,8 @@ function AdminPage() {
   const createFn = useServerFn(adminCreateUser);
   const delFn = useServerFn(adminDeleteUser);
   const toggleFn = useServerFn(adminToggleAdmin);
+  const resetFn = useServerFn(adminResetPassword);
+  const [pwEdits, setPwEdits] = useState<Record<string, string>>({});
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const isAdmin = !!me.data?.isAdmin;
