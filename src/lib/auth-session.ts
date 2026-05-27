@@ -8,6 +8,8 @@ const RECOVERABLE_AUTH_MESSAGES = [
   "refresh_token_not_found",
   "jwt expired",
   "session_not_found",
+  "auth session missing",
+  "session missing",
 ];
 
 function clearStoredAuthTokens() {
@@ -22,7 +24,8 @@ function clearStoredAuthTokens() {
 
 function isRecoverableAuthError(error: AuthError | Error | null | undefined) {
   const message = error?.message?.toLowerCase() ?? "";
-  return RECOVERABLE_AUTH_MESSAGES.some((item) => message.includes(item));
+  const name = (error as { name?: string } | null | undefined)?.name?.toLowerCase() ?? "";
+  return name.includes("authsessionmissing") || RECOVERABLE_AUTH_MESSAGES.some((item) => message.includes(item));
 }
 
 export async function clearLocalAuthState() {

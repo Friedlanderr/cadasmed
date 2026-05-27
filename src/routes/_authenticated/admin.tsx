@@ -14,12 +14,13 @@ import {
   adminGetStats,
   adminListAuditLogs,
 } from "@/lib/auth.functions";
-import { supabase } from "@/integrations/supabase/client";
+import { getAuthenticatedUser } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/login" });
+    if (typeof window === "undefined") return;
+    const user = await getAuthenticatedUser();
+    if (!user) throw redirect({ to: "/login" });
   },
   component: AdminPage,
   head: () => ({ meta: [{ title: "Admin — Usuários" }] }),

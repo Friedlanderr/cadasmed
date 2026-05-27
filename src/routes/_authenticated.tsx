@@ -8,6 +8,7 @@ import { clearLocalAuthState, getAuthenticatedUser } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const user = await getAuthenticatedUser();
     if (!user) throw redirect({ to: "/login" });
   },
@@ -30,7 +31,8 @@ function AuthLayout() {
   useEffect(() => {
     if (!me.error) return;
     if (!(me.error instanceof Error)) return;
-    if (!me.error.message.includes("Unauthorized")) return;
+    const message = me.error.message.toLowerCase();
+    if (!message.includes("unauthorized") && !message.includes("auth session missing") && !message.includes("session missing")) return;
 
     void clearLocalAuthState();
     qc.cancelQueries();
