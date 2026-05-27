@@ -48,6 +48,15 @@ function AdminPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-users"] }),
   });
 
+  const resetMut = useMutation({
+    mutationFn: async (vars: { userId: string; password: string }) => resetFn({ data: vars }),
+    onSuccess: (_d, vars) => {
+      setPwEdits((p) => ({ ...p, [vars.userId]: "" }));
+      alert("Senha atualizada com sucesso");
+    },
+    onError: (e: Error) => alert(e.message),
+  });
+
   if (me.isLoading) return <p className="p-6 text-muted-foreground">Carregando…</p>;
   if (!isAdmin) {
     return (
