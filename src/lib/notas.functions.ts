@@ -456,6 +456,32 @@ export const listSentInvoices = createServerFn({ method: "GET" })
     return { fileIds: (data ?? []).map((r: { file_id: string }) => r.file_id) };
   });
 
+export const toggleSentInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { fileId: string; fileName?: string; sent: boolean }) => {
+    if (!DRIVE_ID_RE.test(String(d?.fileId ?? ""))) throw new Error("fileId inválido");
+    return { fileId: d.fileId, fileName: (d.fileName ?? "").slice(0, 200), sent: !!d.sent };
+  })
+  .handler(async ({ context, data }) => {
+    if (data.sent) {
+      const { error } = await context.supabase
+        .from("sent_invoices")
+        .upsert(
+          { user_id: context.userId, file_id: data.fileId, file_name: data.fileName },
+          { onConflict: "user_id,file_id" },
+        );
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await context.supabase
+        .from("sent_invoices")
+        .delete()
+        .eq("user_id", context.userId)
+        .eq("file_id", data.fileId);
+      if (error) throw new Error(error.message);
+    }
+    return { success: true };
+  });
+
 export const parsePatientText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { text: string }) => d)

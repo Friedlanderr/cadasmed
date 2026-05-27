@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import {
   listInvoices, processInvoice, confirmSend, listSheetTabs,
-  parsePatientText, savePatient, createMonthTab, listSentInvoices,
+  parsePatientText, savePatient, createMonthTab, listSentInvoices, toggleSentInvoice,
 } from "@/lib/notas.functions";
 import { getMe, updateSettings } from "@/lib/auth.functions";
 
@@ -45,6 +45,7 @@ function Index() {
   const parseTxt = useServerFn(parsePatientText);
   const savePat = useServerFn(savePatient);
   const sentFn = useServerFn(listSentInvoices);
+  const toggleSentFn = useServerFn(toggleSentInvoice);
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const configs: MonthConfig[] = me.data?.settings.month_folders ?? [];
@@ -106,6 +107,11 @@ function Index() {
   const procMut = useMutation({
     mutationFn: async (inv: Invoice) => process({ data: { fileId: inv.id, fileName: inv.name } }),
     onSuccess: (p) => { setPreview(p); setEditEmail(p.email); setEditRow(p.sheetRow); },
+  });
+
+  const toggleSentMut = useMutation({
+    mutationFn: async (vars: { fileId: string; fileName: string; sent: boolean }) => toggleSentFn({ data: vars }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sent-invoices"] }),
   });
 
   const sendMut = useMutation({
@@ -225,6 +231,12 @@ function Index() {
                 </div>
                 <div className="flex items-center gap-2">
                   {isSent && <span className="rounded-full bg-success/15 px-3 py-1 text-xs font-medium text-success">Enviado ✓</span>}
+                  <button
+                    onClick={() => toggleSentMut.mutate({ fileId: f.id, fileName: f.name, sent: !isSent })}
+                    disabled={toggleSentMut.isPending}
+                    className="rounded-md border border-border px-3 py-2 text-xs hover:bg-muted disabled:opacity-50">
+                    {isSent ? "Desmarcar" : "Marcar enviado"}
+                  </button>
                   <button onClick={() => { setActive2(f); setPreview(null); procMut.mutate(f); }}
                     disabled={procMut.isPending && active?.id === f.id}
                     className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
