@@ -5,6 +5,7 @@ import { clearLocalAuthState, getAuthenticatedUser, replaceAuthSession } from "@
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const user = await getAuthenticatedUser();
     if (user) throw redirect({ to: "/" });
   },
