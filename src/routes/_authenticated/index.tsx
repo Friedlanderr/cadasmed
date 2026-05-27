@@ -109,6 +109,11 @@ function Index() {
     onSuccess: (p) => { setPreview(p); setEditEmail(p.email); setEditRow(p.sheetRow); },
   });
 
+  const toggleSentMut = useMutation({
+    mutationFn: async (vars: { fileId: string; fileName: string; sent: boolean }) => toggleSentFn({ data: vars }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sent-invoices"] }),
+  });
+
   const sendMut = useMutation({
     mutationFn: async () => {
       if (!preview) throw new Error("Sem preview");
