@@ -14,28 +14,70 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_user_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          severity: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          severity?: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          severity?: string
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          blocked_reason: string | null
           created_at: string
           display_name: string | null
           email: string | null
+          expires_at: string | null
           id: string
+          is_blocked: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
+          blocked_reason?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
+          expires_at?: string | null
           id?: string
+          is_blocked?: boolean
           updated_at?: string
           user_id: string
         }
         Update: {
+          blocked_reason?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
+          expires_at?: string | null
           id?: string
+          is_blocked?: boolean
           updated_at?: string
           user_id?: string
         }
