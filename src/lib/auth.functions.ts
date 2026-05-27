@@ -9,17 +9,24 @@ export const getMe = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const [profileRes, rolesRes, settingsRes] = await Promise.all([
-      supabase.from("profiles").select("email,display_name").eq("user_id", userId).maybeSingle(),
+      supabase.from("profiles").select("email,display_name,is_blocked,blocked_reason,expires_at").eq("user_id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
       supabase.from("user_settings").select("cadastro_sheet_id,notas_sheet_id,month_folders,email_search_terms").eq("user_id", userId).maybeSingle(),
     ]);
+    const profile = profileRes.data as { email?: string; display_name?: string; is_blocked?: boolean; blocked_reason?: string | null; expires_at?: string | null } | null;
+    if (profile?.is_blocked) {
+      throw new Error(`Conta bloqueada${profile.blocked_reason ? `: ${profile.blocked_reason}` : ""}`);
+    }
+    if (profile?.expires_at && new Date(profile.expires_at).getTime() < Date.now()) {
+      throw new Error("Acesso expirado. Contate o administrador.");
+    }
     const roles = (rolesRes.data ?? []).map((r) => r.role as string);
     const rawTerms = settingsRes.data?.email_search_terms;
     const terms = Array.isArray(rawTerms) && rawTerms.length > 0 ? rawTerms : ["Pagamento Pix recebido"];
     return {
       userId,
-      email: profileRes.data?.email ?? "",
-      displayName: profileRes.data?.display_name ?? "",
+      email: profile?.email ?? "",
+      displayName: profile?.display_name ?? "",
       isAdmin: roles.includes("admin"),
       settings: {
         cadastro_sheet_id: settingsRes.data?.cadastro_sheet_id ?? "",
