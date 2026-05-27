@@ -231,6 +231,12 @@ function Index() {
                 </div>
                 <div className="flex items-center gap-2">
                   {isSent && <span className="rounded-full bg-success/15 px-3 py-1 text-xs font-medium text-success">Enviado ✓</span>}
+                  <button
+                    onClick={() => toggleSentMut.mutate({ fileId: f.id, fileName: f.name, sent: !isSent })}
+                    disabled={toggleSentMut.isPending}
+                    className="rounded-md border border-border px-3 py-2 text-xs hover:bg-muted disabled:opacity-50">
+                    {isSent ? "Desmarcar" : "Marcar enviado"}
+                  </button>
                   <button onClick={() => { setActive2(f); setPreview(null); procMut.mutate(f); }}
                     disabled={procMut.isPending && active?.id === f.id}
                     className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
