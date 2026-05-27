@@ -123,6 +123,17 @@ export const adminDeleteUser = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+export const adminResetPassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string; password: string }) => d)
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.userId);
+    if (data.password.length < 8) throw new Error("Senha precisa ter ao menos 8 caracteres");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, { password: data.password });
+    if (error) throw new Error(error.message);
+    return { success: true };
+  });
+
 export const adminToggleAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { userId: string; makeAdmin: boolean }) => d)
