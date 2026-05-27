@@ -30,7 +30,8 @@ function AuthLayout() {
   useEffect(() => {
     if (!me.error) return;
     if (!(me.error instanceof Error)) return;
-    if (!me.error.message.includes("Unauthorized")) return;
+    const message = me.error.message.toLowerCase();
+    if (!message.includes("unauthorized") && !message.includes("auth session missing") && !message.includes("session missing")) return;
 
     void clearLocalAuthState();
     qc.cancelQueries();
