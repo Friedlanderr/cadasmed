@@ -45,6 +45,7 @@ function Index() {
   const parseTxt = useServerFn(parsePatientText);
   const savePat = useServerFn(savePatient);
   const sentFn = useServerFn(listSentInvoices);
+  const toggleSentFn = useServerFn(toggleSentInvoice);
 
   const me = useQuery({ queryKey: ["me"], queryFn: () => meFn(), retry: false });
   const configs: MonthConfig[] = me.data?.settings.month_folders ?? [];
