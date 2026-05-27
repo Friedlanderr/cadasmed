@@ -31,6 +31,7 @@ function AuthLayout() {
     if (!(me.error instanceof Error)) return;
     if (!me.error.message.includes("Unauthorized")) return;
 
+    void supabase.auth.signOut({ scope: "local" });
     qc.cancelQueries();
     qc.clear();
     nav({ to: "/login", replace: true });
@@ -39,24 +40,48 @@ function AuthLayout() {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    async function syncAuthState(redirectIfMissing: boolean) {
+      const { data, error } = await supabase.auth.getUser();
       if (!mounted) return;
-      setHasSession(!!data.session);
-      setAuthReady(true);
-    });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setHasSession(!!session);
+      const authenticated = !!data.user && !error;
+      setHasSession(authenticated);
       setAuthReady(true);
 
-      if (!session) {
+      if (!authenticated) {
+        if (redirectIfMissing) {
+          qc.cancelQueries();
+          qc.clear();
+          nav({ to: "/login", replace: true });
+        }
+        return;
+      }
+
+      qc.invalidateQueries({ queryKey: ["me"] });
+    }
+
+    void syncAuthState(false);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      if (event === "SIGNED_OUT") {
+        setHasSession(false);
+        setAuthReady(true);
         qc.cancelQueries();
         qc.clear();
         nav({ to: "/login", replace: true });
         return;
       }
 
-      qc.invalidateQueries();
+      if (session) {
+        setHasSession(true);
+        setAuthReady(true);
+        qc.invalidateQueries({ queryKey: ["me"] });
+        return;
+      }
+
+      await syncAuthState(true);
     });
 
     return () => {
