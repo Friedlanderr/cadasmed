@@ -1,11 +1,12 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { clearLocalAuthState, getAuthenticatedUser, replaceAuthSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (data.user && !error) throw redirect({ to: "/" });
+    const user = await getAuthenticatedUser();
+    if (user) throw redirect({ to: "/" });
   },
   component: LoginPage,
   head: () => ({ meta: [{ title: "Entrar — Notas Fiscais" }] }),
@@ -22,14 +23,34 @@ function LoginPage() {
     e.preventDefault();
     setErr(""); setLoading(true);
 
-    await supabase.auth.signOut({ scope: "local" });
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      await clearLocalAuthState();
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
 
-    setLoading(false);
-    // Supabase lança AuthWeakPasswordError quando a senha é considerada fraca (HIBP),
-    // mas a sessão É criada. Se temos sessão, prosseguimos.
-    if (error && !data?.session) { setErr(error.message); return; }
-    nav({ to: "/" });
+      if (error && !data?.session) {
+        setErr(error.message);
+        return;
+      }
+
+      if (!data?.session) {
+        setErr("Não foi possível iniciar a sessão.");
+        return;
+      }
+
+      await replaceAuthSession(data.session);
+      const user = await getAuthenticatedUser();
+
+      if (!user) {
+        setErr("A sessão expirou ao entrar. Tente novamente.");
+        return;
+      }
+
+      nav({ to: "/", replace: true });
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Falha ao entrar.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
