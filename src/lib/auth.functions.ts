@@ -74,6 +74,38 @@ async function assertAdmin(userId: string) {
   if (!data) throw new Error("Apenas administradores podem executar esta ação");
 }
 
+async function logAudit(opts: {
+  actorId: string;
+  action: string;
+  targetUserId?: string | null;
+  details?: Record<string, unknown>;
+  severity?: "info" | "warn" | "error";
+}) {
+  const { data: actorProfile } = await supabaseAdmin
+    .from("profiles").select("email").eq("user_id", opts.actorId).maybeSingle();
+  await supabaseAdmin.from("audit_logs").insert({
+    actor_user_id: opts.actorId,
+    actor_email: actorProfile?.email ?? null,
+    target_user_id: opts.targetUserId ?? null,
+    action: opts.action,
+    details: opts.details ?? {},
+    severity: opts.severity ?? "info",
+  });
+}
+
+export const logClientError = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { message: string; context?: string }) => d)
+  .handler(async ({ context, data }) => {
+    await logAudit({
+      actorId: context.userId,
+      action: "client.error",
+      details: { message: String(data.message).slice(0, 500), context: data.context?.slice(0, 200) },
+      severity: "error",
+    });
+    return { ok: true };
+  });
+
 export const adminListUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
