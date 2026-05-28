@@ -1,13 +1,13 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { clearLocalAuthState, getAuthenticatedUser, replaceAuthSession } from "@/lib/auth-session";
+import { clearLocalAuthState, getLocalSession, replaceAuthSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
-    const user = await getAuthenticatedUser();
-    if (user) throw redirect({ to: "/" });
+    const session = await getLocalSession();
+    if (session) throw redirect({ to: "/" });
   },
   component: LoginPage,
   head: () => ({ meta: [{ title: "Entrar — Notas Fiscais" }] }),
@@ -39,13 +39,6 @@ function LoginPage() {
       }
 
       await replaceAuthSession(data.session);
-      const user = await getAuthenticatedUser();
-
-      if (!user) {
-        setErr("A sessão expirou ao entrar. Tente novamente.");
-        return;
-      }
-
       nav({ to: "/", replace: true });
     } catch (error) {
       setErr(error instanceof Error ? error.message : "Falha ao entrar.");
