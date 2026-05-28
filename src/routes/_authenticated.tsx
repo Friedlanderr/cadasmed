@@ -4,13 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getMe } from "@/lib/auth.functions";
-import { clearLocalAuthState, getAuthenticatedUser } from "@/lib/auth-session";
+import { clearLocalAuthState, getLocalSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     if (typeof window === "undefined") throw redirect({ to: "/login" });
-    const user = await getAuthenticatedUser();
-    if (!user) throw redirect({ to: "/login" });
+    const session = await getLocalSession();
+    if (!session) throw redirect({ to: "/login" });
   },
   component: AuthLayout,
 });
@@ -44,23 +44,34 @@ function AuthLayout() {
     let mounted = true;
 
     async function syncAuthState(redirectIfMissing: boolean) {
-      const user = await getAuthenticatedUser();
-      if (!mounted) return;
+      try {
+        const session = await getLocalSession();
+        if (!mounted) return;
 
-      const authenticated = !!user;
-      setHasSession(authenticated);
-      setAuthReady(true);
+        const authenticated = !!session;
+        setHasSession(authenticated);
+        setAuthReady(true);
 
-      if (!authenticated) {
+        if (!authenticated) {
+          if (redirectIfMissing) {
+            qc.cancelQueries();
+            qc.clear();
+            nav({ to: "/login", replace: true });
+          }
+          return;
+        }
+
+        qc.invalidateQueries({ queryKey: ["me"] });
+      } catch {
+        if (!mounted) return;
+        setHasSession(false);
+        setAuthReady(true);
         if (redirectIfMissing) {
           qc.cancelQueries();
           qc.clear();
           nav({ to: "/login", replace: true });
         }
-        return;
       }
-
-      qc.invalidateQueries({ queryKey: ["me"] });
     }
 
     void syncAuthState(false);
@@ -98,7 +109,11 @@ function AuthLayout() {
   }
 
   if (!authReady || !hasSession) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
   }
 
   return (
