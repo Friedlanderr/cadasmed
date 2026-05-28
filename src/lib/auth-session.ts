@@ -1,5 +1,4 @@
 import type { AuthError, Session, User } from "@supabase/supabase-js";
-
 import { supabase } from "@/integrations/supabase/client";
 
 const RECOVERABLE_AUTH_MESSAGES = [
@@ -14,7 +13,6 @@ const RECOVERABLE_AUTH_MESSAGES = [
 
 function clearStoredAuthTokens() {
   if (typeof window === "undefined") return;
-
   Object.keys(window.localStorage).forEach((key) => {
     if (/^sb-.*-auth-token$/i.test(key) || key === "supabase.auth.token") {
       window.localStorage.removeItem(key);
@@ -35,24 +33,26 @@ export async function clearLocalAuthState() {
 
 export async function getAuthenticatedUser(): Promise<User | null> {
   const { data, error } = await supabase.auth.getUser();
-
   if (isRecoverableAuthError(error)) {
     await clearLocalAuthState();
     return null;
   }
-
   if (error) throw error;
   return data.user ?? null;
 }
 
+export async function getLocalSession() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session) return null;
+  return data.session;
+}
+
 export async function replaceAuthSession(session: Pick<Session, "access_token" | "refresh_token">) {
   clearStoredAuthTokens();
-
   const { data, error } = await supabase.auth.setSession({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
   });
-
   if (error) throw error;
   return data.session;
 }
