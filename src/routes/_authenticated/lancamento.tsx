@@ -232,7 +232,8 @@ function LancamentoPage() {
             status[s.messageId] = "skip"; errs[s.messageId] = "Sem nome no pagamento";
             setBulkStatus({ ...status }); setBulkErr({ ...errs }); continue;
           }
-          const obsFinal = paciente && pagante ? `Beneficiário: ${paciente.nome}` :
+          const fmtPag = (p: any) => `Pago por: ${p.nome}${p.cpf ? `, CPF ${p.cpf}` : ""}${p.cep ? `, CEP ${p.cep}` : ""}${p.email ? `, ${p.email}` : ""}`;
+          const obsFinal = paciente && pagante ? `${fmtPag(pagante)} | Beneficiário: ${paciente.nome}` :
                            m.source === "none" ? "Sem correspondência no Cadastro" : "";
 
           await lancarFn({
