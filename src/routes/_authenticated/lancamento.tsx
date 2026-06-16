@@ -102,9 +102,7 @@ function LancamentoPage() {
 
   const lancarMut = useMutation({
     mutationFn: async () => {
-      const usePagante = emitirEm === "pagante" && pagSel;
-      const target = usePagante ? pagSel : pacienteSel;
-      if (!target) throw new Error("Selecione um paciente (e pagante, se for o caso)");
+      if (!pacienteSel) throw new Error("Selecione um paciente");
       if (!valorPag.trim()) throw new Error("Informe o valor pago");
       if (!mes) throw new Error("Selecione o mês de destino");
 
@@ -112,20 +110,19 @@ function LancamentoPage() {
         `Pago por: ${p.nome}${p.cpf ? `, CPF ${p.cpf}` : ""}${p.cep ? `, CEP ${p.cep}` : ""}${p.email ? `, ${p.email}` : ""}`;
       const observacaoFinal = [
         obs.trim(),
-        pagSel && emitirEm === "paciente" ? fmtPagante(pagSel) : "",
-        usePagante ? `Beneficiário: ${pacienteSel?.nome ?? ""}` : "",
+        pagSel ? fmtPagante(pagSel) : "",
       ].filter(Boolean).join(" | ");
 
       return lancarFn({
         data: {
           data_pagamento: dataPag,
           sheetName: mes,
-          nome: target.nome,
-          cpf: target.cpf ?? "",
-          cep: target.cep ?? "",
-          email: target.email ?? "",
-          descricao: target.descricao || "Consulta Psiquiatria",
-          valor_consulta: pacienteSel?.valor_consulta ?? "",
+          nome: pacienteSel.nome,
+          cpf: pacienteSel.cpf ?? "",
+          cep: pacienteSel.cep ?? "",
+          email: pacienteSel.email ?? "",
+          descricao: pacienteSel.descricao || "Consulta Psiquiatria",
+          valor_consulta: pacienteSel.valor_consulta ?? "",
           valor_pagamento: valorPag,
           observacao: observacaoFinal,
         },
