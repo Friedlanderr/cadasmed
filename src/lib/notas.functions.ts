@@ -744,12 +744,7 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       try { parsed = JSON.parse(m[0]); } catch { continue; }
       if (!parsed.pagador?.trim()) continue;
 
-      // Match against Cadastro
-      let bestCad: { score: number; row: string[] | null } = { score: 0, row: null };
-      for (const r of cadRows) {
-        const score = nameSimilarity(parsed.pagador, r[0] ?? "");
-        if (score > bestCad.score) bestCad = { score, row: r };
-      }
+      // Match ONLY against Pagantes cadastrados — não inferir paciente a partir do nome do pagador
       let bestPag: { score: number; row: string[] | null } = { score: 0, row: null };
       for (const r of pagRows) {
         const score = nameSimilarity(parsed.pagador, r[1] ?? "");
@@ -758,15 +753,7 @@ export const scanInterPayments = createServerFn({ method: "POST" })
 
       const date = gmailDateToBR(msg.internalDate);
       let match: any;
-      if (bestCad.score >= 0.5 && bestCad.score >= bestPag.score) {
-        const r = bestCad.row!;
-        match = {
-          source: "cadastro", score: bestCad.score,
-          nome: r[0] ?? "", cpf: r[1] ?? "", cep: r[2] ?? "", email: r[3] ?? "",
-          descricao: r[4] ?? "Consulta Psiquiatria",
-          valor_consulta: r[5] ?? "",
-        };
-      } else if (bestPag.score >= 0.5) {
+      if (bestPag.score >= 0.5) {
         const r = bestPag.row!;
         match = {
           source: "pagante", score: bestPag.score,
