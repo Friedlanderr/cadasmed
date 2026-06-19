@@ -105,22 +105,29 @@ function LancamentoPage() {
       if (!pacienteSel) throw new Error("Selecione um paciente");
       if (!valorPag.trim()) throw new Error("Informe o valor pago");
       if (!mes) throw new Error("Selecione o mês de destino");
+      if (emitirEm === "pagante" && !pagSel) throw new Error("Selecione o pagante para emitir a NF em seu nome");
 
-      const fmtPagante = (p: { nome: string; cpf?: string | null; cep?: string | null; email?: string | null }) =>
-        `Pago por: ${p.nome}${p.cpf ? `, CPF ${p.cpf}` : ""}${p.cep ? `, CEP ${p.cep}` : ""}${p.email ? `, ${p.email}` : ""}`;
+      const fmtPagante = (p: { nome: string; cpf?: string | null; cep?: string | null; email?: string | null }, prefix: string) =>
+        `${prefix}: ${p.nome}${p.cpf ? `, CPF ${p.cpf}` : ""}${p.cep ? `, CEP ${p.cep}` : ""}${p.email ? `, ${p.email}` : ""}`;
+
+      const nfPagante = emitirEm === "pagante" && pagSel;
       const observacaoFinal = [
         obs.trim(),
-        pagSel ? fmtPagante(pagSel) : "",
+        nfPagante ? fmtPagante(pagSel, "NF e pago por") :
+        pagSel ? fmtPagante(pagSel, "Pago por") : "",
       ].filter(Boolean).join(" | ");
+
+      // Quando NF é emitida em nome do pagante, colunas A-H levam dados do pagante.
+      const titular = nfPagante ? pagSel : pacienteSel;
 
       return lancarFn({
         data: {
           data_pagamento: dataPag,
           sheetName: mes,
-          nome: pacienteSel.nome,
-          cpf: pacienteSel.cpf ?? "",
-          cep: pacienteSel.cep ?? "",
-          email: pacienteSel.email ?? "",
+          nome: titular.nome,
+          cpf: titular.cpf ?? "",
+          cep: titular.cep ?? "",
+          email: titular.email ?? "",
           descricao: pacienteSel.descricao || "Consulta Psiquiatria",
           valor_consulta: pacienteSel.valor_consulta ?? "",
           valor_pagamento: valorPag,
