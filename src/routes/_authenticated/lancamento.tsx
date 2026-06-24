@@ -29,6 +29,27 @@ function monthFromBR(s: string) {
   return mi >= 0 && mi < 12 ? MONTHS_PT[mi] : "";
 }
 
+const STOPWORDS = new Set(["de","da","do","dos","das","e"]);
+function nameTokens(s: string): string[] {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z\s]/g, " ").split(/\s+/).filter((t) => t && !STOPWORDS.has(t));
+}
+function findBeneficiario(ben: string | undefined | null, items: any[] | undefined): any | null {
+  const bt = nameTokens(ben ?? "");
+  if (bt.length === 0 || !items?.length) return null;
+  const bFirst = bt[0], bLast = bt[bt.length - 1];
+  // require first AND last significant tokens to match
+  const matches = items.filter((p) => {
+    const pt = nameTokens(p.nome);
+    if (pt.length === 0) return false;
+    return pt[0] === bFirst && pt[pt.length - 1] === bLast;
+  });
+  if (matches.length === 1) return matches[0];
+  // tiebreak: prefer same total token count
+  const exact = matches.find((p) => nameTokens(p.nome).length === bt.length);
+  return exact ?? null;
+}
+
 function LancamentoPage() {
   const qc = useQueryClient();
   const meFn = useServerFn(getMe);
