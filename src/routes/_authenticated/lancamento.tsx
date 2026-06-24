@@ -152,7 +152,7 @@ function LancamentoPage() {
           email: titular.email ?? "",
           descricao: pacienteSel.descricao || "Consulta Psiquiatria",
           valor_consulta: pacienteSel.valor_consulta ?? "",
-          valor_pagamento: valorPag,
+          valor_pagamento: parseMoney(valorPag),
           observacao: observacaoFinal,
         },
       });
