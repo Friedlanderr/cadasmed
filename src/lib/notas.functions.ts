@@ -42,13 +42,24 @@ async function getUserSheetIds(ctx: { supabase: any; userId: string }) {
 function normalize(s: string) {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
+const STOPWORDS = new Set(["de","da","do","dos","das","e"]);
+function tokens(s: string) {
+  return normalize(s).split(" ").filter((w) => w.length > 1 && !STOPWORDS.has(w));
+}
 function nameSimilarity(a: string, b: string) {
-  const A = new Set(normalize(a).split(" ").filter((w) => w.length > 1));
-  const B = new Set(normalize(b).split(" ").filter((w) => w.length > 1));
+  const A = new Set(tokens(a));
+  const B = new Set(tokens(b));
   if (!A.size || !B.size) return 0;
   let inter = 0;
   for (const w of A) if (B.has(w)) inter++;
   return inter / Math.max(A.size, B.size);
+}
+// True quando primeiro e último nome significativos coincidem — evita
+// falso-positivo entre nomes parecidos (ex.: Carmen vs Clarissa Albuquerque).
+function firstAndLastMatch(a: string, b: string) {
+  const ta = tokens(a), tb = tokens(b);
+  if (!ta.length || !tb.length) return false;
+  return ta[0] === tb[0] && ta[ta.length - 1] === tb[tb.length - 1];
 }
 
 async function driveDownload(fileId: string) {
