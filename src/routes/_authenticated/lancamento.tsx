@@ -29,6 +29,27 @@ function monthFromBR(s: string) {
   return mi >= 0 && mi < 12 ? MONTHS_PT[mi] : "";
 }
 
+const STOPWORDS = new Set(["de","da","do","dos","das","e"]);
+function nameTokens(s: string): string[] {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z\s]/g, " ").split(/\s+/).filter((t) => t && !STOPWORDS.has(t));
+}
+function findBeneficiario(ben: string | undefined | null, items: any[] | undefined): any | null {
+  const bt = nameTokens(ben ?? "");
+  if (bt.length === 0 || !items?.length) return null;
+  const bFirst = bt[0], bLast = bt[bt.length - 1];
+  // require first AND last significant tokens to match
+  const matches = items.filter((p) => {
+    const pt = nameTokens(p.nome);
+    if (pt.length === 0) return false;
+    return pt[0] === bFirst && pt[pt.length - 1] === bLast;
+  });
+  if (matches.length === 1) return matches[0];
+  // tiebreak: prefer same total token count
+  const exact = matches.find((p) => nameTokens(p.nome).length === bt.length);
+  return exact ?? null;
+}
+
 function LancamentoPage() {
   const qc = useQueryClient();
   const meFn = useServerFn(getMe);
@@ -178,8 +199,7 @@ function LancamentoPage() {
     } else if (m.source === "pagante") {
       setPagSel({ nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email });
       setPagQ(m.nome);
-      const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
-      const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+      const benRow = findBeneficiario(m.beneficiarioSugerido, cad.data?.items);
       if (benRow) { setPacienteSel(benRow); setPacienteQ(benRow.nome); }
       setEmitirEm("paciente");
     } else {
@@ -211,8 +231,7 @@ function LancamentoPage() {
             paciente = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email, descricao: m.descricao, valor_consulta: m.valor_consulta };
           } else if (m.source === "pagante") {
             pagante = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email };
-            const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
-            const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+            const benRow = findBeneficiario(m.beneficiarioSugerido, cad.data?.items);
             if (benRow) paciente = benRow;
           }
 
