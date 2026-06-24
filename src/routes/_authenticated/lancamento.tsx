@@ -268,7 +268,7 @@ function LancamentoPage() {
               email: target.email ?? "",
               descricao: (paciente?.descricao) || target.descricao || "Consulta Psiquiatria",
               valor_consulta: (paciente?.valor_consulta) ?? target.valor_consulta ?? "",
-              valor_pagamento: v ? `R$ ${v}` : "",
+              valor_pagamento: parseMoney(v ? `R$ ${v}` : ""),
               observacao: obsFinal,
             },
           });
