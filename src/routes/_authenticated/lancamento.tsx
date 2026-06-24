@@ -178,8 +178,7 @@ function LancamentoPage() {
     } else if (m.source === "pagante") {
       setPagSel({ nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email });
       setPagQ(m.nome);
-      const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
-      const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+      const benRow = findBeneficiario(m.beneficiarioSugerido, cad.data?.items);
       if (benRow) { setPacienteSel(benRow); setPacienteQ(benRow.nome); }
       setEmitirEm("paciente");
     } else {
