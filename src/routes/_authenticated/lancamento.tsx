@@ -526,7 +526,8 @@ function LancamentoPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">
             <span className="text-sm font-medium">Valor pago</span>
-            <input value={valorPag} onChange={(e) => setValorPag(e.target.value)} placeholder="R$ 400,00"
+            <input value={valorPag} onChange={(e) => setValorPag(maskMoneyInput(e.target.value))} placeholder="R$ 400,00"
+              inputMode="decimal"
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </label>
           <label className="block">
