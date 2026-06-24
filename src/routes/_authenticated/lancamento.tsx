@@ -210,8 +210,7 @@ function LancamentoPage() {
             paciente = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email, descricao: m.descricao, valor_consulta: m.valor_consulta };
           } else if (m.source === "pagante") {
             pagante = { nome: m.nome, cpf: m.cpf, cep: m.cep, email: m.email };
-            const ben = (m.beneficiarioSugerido ?? "").trim().toLowerCase();
-            const benRow = ben ? cad.data?.items.find((p) => p.nome.toLowerCase().includes(ben.split(" ")[0])) : null;
+            const benRow = findBeneficiario(m.beneficiarioSugerido, cad.data?.items);
             if (benRow) paciente = benRow;
           }
 
