@@ -42,13 +42,24 @@ async function getUserSheetIds(ctx: { supabase: any; userId: string }) {
 function normalize(s: string) {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
+const STOPWORDS = new Set(["de","da","do","dos","das","e"]);
+function tokens(s: string) {
+  return normalize(s).split(" ").filter((w) => w.length > 1 && !STOPWORDS.has(w));
+}
 function nameSimilarity(a: string, b: string) {
-  const A = new Set(normalize(a).split(" ").filter((w) => w.length > 1));
-  const B = new Set(normalize(b).split(" ").filter((w) => w.length > 1));
+  const A = new Set(tokens(a));
+  const B = new Set(tokens(b));
   if (!A.size || !B.size) return 0;
   let inter = 0;
   for (const w of A) if (B.has(w)) inter++;
   return inter / Math.max(A.size, B.size);
+}
+// True quando primeiro e último nome significativos coincidem — evita
+// falso-positivo entre nomes parecidos (ex.: Carmen vs Clarissa Albuquerque).
+function firstAndLastMatch(a: string, b: string) {
+  const ta = tokens(a), tb = tokens(b);
+  if (!ta.length || !tb.length) return false;
+  return ta[0] === tb[0] && ta[ta.length - 1] === tb[tb.length - 1];
 }
 
 async function driveDownload(fileId: string) {
@@ -745,22 +756,27 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       if (!parsed.pagador?.trim()) continue;
 
       // Match contra Pagantes cadastrados e contra Cadastro de Pacientes.
-      // Pagantes: threshold 0.5 (cadastro explícito). Cadastro: threshold 0.85
-      // para evitar inferências erradas entre nomes parecidos (ex.: Carmen vs Clarissa).
+      // Critério: similaridade razoável (>=0.5) E primeiro+último nome coincidem.
+      // Isso evita falso-positivo entre nomes parecidos (Carmen vs Clarissa)
+      // sem exigir score altíssimo que rejeitaria correspondências legítimas.
       let bestPag: { score: number; row: string[] | null } = { score: 0, row: null };
       for (const r of pagRows) {
-        const score = nameSimilarity(parsed.pagador, r[1] ?? "");
+        const nm = r[1] ?? "";
+        if (!firstAndLastMatch(parsed.pagador, nm)) continue;
+        const score = nameSimilarity(parsed.pagador, nm);
         if (score > bestPag.score) bestPag = { score, row: r };
       }
       let bestCad: { score: number; row: string[] | null } = { score: 0, row: null };
       for (const r of cadRows) {
-        const score = nameSimilarity(parsed.pagador, r[0] ?? "");
+        const nm = r[0] ?? "";
+        if (!firstAndLastMatch(parsed.pagador, nm)) continue;
+        const score = nameSimilarity(parsed.pagador, nm);
         if (score > bestCad.score) bestCad = { score, row: r };
       }
 
       const date = gmailDateToBR(msg.internalDate);
       const pagOk = bestPag.score >= 0.5;
-      const cadOk = bestCad.score >= 0.85;
+      const cadOk = bestCad.score >= 0.5;
       let match: any;
       if (pagOk && (!cadOk || bestPag.score >= bestCad.score)) {
         const r = bestPag.row!;
