@@ -756,22 +756,27 @@ export const scanInterPayments = createServerFn({ method: "POST" })
       if (!parsed.pagador?.trim()) continue;
 
       // Match contra Pagantes cadastrados e contra Cadastro de Pacientes.
-      // Pagantes: threshold 0.5 (cadastro explícito). Cadastro: threshold 0.85
-      // para evitar inferências erradas entre nomes parecidos (ex.: Carmen vs Clarissa).
+      // Critério: similaridade razoável (>=0.5) E primeiro+último nome coincidem.
+      // Isso evita falso-positivo entre nomes parecidos (Carmen vs Clarissa)
+      // sem exigir score altíssimo que rejeitaria correspondências legítimas.
       let bestPag: { score: number; row: string[] | null } = { score: 0, row: null };
       for (const r of pagRows) {
-        const score = nameSimilarity(parsed.pagador, r[1] ?? "");
+        const nm = r[1] ?? "";
+        if (!firstAndLastMatch(parsed.pagador, nm)) continue;
+        const score = nameSimilarity(parsed.pagador, nm);
         if (score > bestPag.score) bestPag = { score, row: r };
       }
       let bestCad: { score: number; row: string[] | null } = { score: 0, row: null };
       for (const r of cadRows) {
-        const score = nameSimilarity(parsed.pagador, r[0] ?? "");
+        const nm = r[0] ?? "";
+        if (!firstAndLastMatch(parsed.pagador, nm)) continue;
+        const score = nameSimilarity(parsed.pagador, nm);
         if (score > bestCad.score) bestCad = { score, row: r };
       }
 
       const date = gmailDateToBR(msg.internalDate);
       const pagOk = bestPag.score >= 0.5;
-      const cadOk = bestCad.score >= 0.85;
+      const cadOk = bestCad.score >= 0.5;
       let match: any;
       if (pagOk && (!cadOk || bestPag.score >= bestCad.score)) {
         const r = bestPag.row!;
