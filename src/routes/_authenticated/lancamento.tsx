@@ -208,7 +208,7 @@ function LancamentoPage() {
       setPagQ(m.nome);
     }
     const v = (s.valor ?? "").replace(/[^\d,.]/g, "");
-    if (v) setValorPag(`R$ ${v}`);
+    if (v) setValorPag(maskMoneyInput(v));
     if (s.date) setDataPag(s.date);
     setOkMsg("Sugestão aplicada — confira os campos");
     setTimeout(() => setOkMsg(""), 3000);
