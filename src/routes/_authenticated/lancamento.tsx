@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { listCadastro, listPagantes, listSheetTabs, lancarPagamento, createMonthTab, scanInterPayments } from "@/lib/notas.functions";
 import { getMe } from "@/lib/auth.functions";
+import { parseMoney, maskMoneyInput } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/lancamento")({
   component: LancamentoPage,
