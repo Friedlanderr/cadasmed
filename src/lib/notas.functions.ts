@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseMoney } from "@/lib/utils";
+
 
 const DRIVE = "https://connector-gateway.lovable.dev/google_drive/drive/v3";
 const SHEETS = "https://connector-gateway.lovable.dev/google_sheets/v4";
@@ -586,18 +588,23 @@ export const lancarPagamento = createServerFn({ method: "POST" })
   .inputValidator((d: {
     data_pagamento: string; sheetName: string;
     nome: string; cpf: string; cep: string; email: string;
-    descricao: string; valor_consulta: string; valor_pagamento: string;
+    descricao: string; valor_consulta: string | number; valor_pagamento: string | number;
     observacao: string;
   }) => {
     if (!d || typeof d !== "object") throw new Error("Payload inválido");
     if (!MONTHS_PT.includes(d.sheetName)) throw new Error("Mês de destino inválido");
-    const fields: Array<keyof typeof d> = [
+    const stringFields: Array<keyof typeof d> = [
       "data_pagamento","nome","cpf","cep","email",
-      "descricao","valor_consulta","valor_pagamento","observacao",
+      "descricao","observacao",
     ];
-    for (const f of fields) {
+    for (const f of stringFields) {
       const v = (d as any)[f];
       if (typeof v !== "string" || v.length > 500) throw new Error(`Campo ${f} inválido`);
+    }
+    for (const f of ["valor_consulta", "valor_pagamento"] as const) {
+      const v = (d as any)[f];
+      if (v != null && typeof v !== "string" && typeof v !== "number") throw new Error(`Campo ${f} inválido`);
+      if (typeof v === "string" && v.length > 500) throw new Error(`Campo ${f} inválido`);
     }
     if (!d.nome.trim()) throw new Error("Nome obrigatório");
     return d;
@@ -606,7 +613,7 @@ export const lancarPagamento = createServerFn({ method: "POST" })
     const { NOTAS_ID } = await getUserSheetIds(context);
     const row = [
       data.data_pagamento, data.nome, data.cpf, data.cep, data.email,
-      data.descricao, data.valor_consulta, data.valor_pagamento, data.observacao,
+      data.descricao, parseMoney(data.valor_consulta), parseMoney(data.valor_pagamento), data.observacao,
       "", "",
     ];
     await sheetAppend(NOTAS_ID, `${data.sheetName}!A:K`, [row]);
